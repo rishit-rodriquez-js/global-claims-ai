@@ -1,0 +1,29 @@
+# Node dependencies & build outputs
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python virtual environment & bytecode
+backend/__pycache__/
+backend/*/__pycache__/
+*.pyc
+venv/
+.venv/
+__pycache__/
+
+# Environment variables & local data
+.env
+.env.local
+*.db
+*.sqlite
+database/*.db
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/sample_policies/*
+!storage/sample_policies/.gitkeep
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
