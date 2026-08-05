@@ -29,6 +29,6 @@ def mask_pii(text: str) -> str:
     text = re.sub(r'\b([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b', mask_email, text)
 
     # Credit Card Pattern
-    text = re.sub(r'\b(?:\d[ -]*?){13,16}\b', r'**** **** **** \1', text)
+    text = re.sub(r'\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?(\d{4})\b', r'**** **** **** \1', text)
 
     return text
