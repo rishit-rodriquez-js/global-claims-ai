@@ -201,7 +201,7 @@ export default function DocumentExtractionReport({ claim }) {
           </button>
 
           {isExportOpen && (
-            <div className="absolute right-0 mt-2 w-60 bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl z-50 py-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95">
+            <div className="absolute right-0 mt-2 w-64 glass-panel bg-[#0f172a]/95 border border-slate-700/80 rounded-2xl shadow-2xl z-50 py-2 backdrop-blur-xl animate-fade-in animate-slide-up">
               <button
                 onClick={handleExportExcel}
                 className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-800/80"

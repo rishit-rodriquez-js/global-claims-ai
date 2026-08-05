@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { reviewClaimApi } from '../services/api.js';
 import DocumentExtractionReport from '../components/DocumentExtractionReport.jsx';
+import EmptyState from '../components/EmptyState.jsx';
 
 export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, currentUser }) {
   const pendingClaims = claims.filter(c => c.status === 'Human Review');
@@ -104,8 +105,14 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
         </div>
       )}
 
-      {/* Vertical Review Workspace Flow */}
-      <div className="space-y-6">
+      {!activeClaim ? (
+        <EmptyState
+          title="Review Queue Cleared"
+          description="There are currently no claims requiring human officer review."
+        />
+      ) : (
+        /* Vertical Review Workspace Flow */
+        <div className="space-y-6">
         {/* Section 1 (Top - Full Width): Submitted Claim File & Metadata */}
         <div className="stripe-card p-6 border border-slate-800 bg-[#0f172a] space-y-5">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
@@ -238,6 +245,7 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

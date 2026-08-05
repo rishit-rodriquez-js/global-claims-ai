@@ -13,6 +13,7 @@ import {
   List
 } from 'lucide-react';
 import AnalyticsCharts from '../components/AnalyticsCharts.jsx';
+import EmptyState from '../components/EmptyState.jsx';
 
 export default function DashboardView({ 
   claims = [], 
@@ -280,7 +281,17 @@ export default function DashboardView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredClaims.map((claim) => (
+                {filteredClaims.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="p-0">
+                      <EmptyState 
+                        title="No Claims Found"
+                        description={`No claims matched your query "${searchQuery}". Clear your search filter or file a new claim.`}
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filteredClaims.map((claim) => (
                   <tr 
                     key={claim.id}
                     onClick={() => onSelectClaim(claim)}
@@ -330,15 +341,7 @@ export default function DashboardView({
                       </button>
                     </td>
                   </tr>
-                ))}
-
-                {filteredClaims.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="py-8 text-center text-xs text-slate-500">
-                      No insurance claims found matching search criteria.
-                    </td>
-                  </tr>
-                )}
+                )))}
               </tbody>
             </table>
           </div>
