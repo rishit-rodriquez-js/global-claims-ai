@@ -6,33 +6,33 @@ export default function Header({ searchQuery, setSearchQuery, currentUser, onLog
   const getRoleBadgeStyle = (role) => {
     switch (role) {
       case 'Customer':
-        return 'bg-[#00E5FF]/10 text-[#00E5FF] border-[#00E5FF]/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]';
+        return 'bg-[#4DFFB4]/10 text-[#4DFFB4] border-[#4DFFB4]/30 shadow-[0_0_12px_rgba(77,255,180,0.2)]';
       case 'Claim Officer':
-        return 'bg-[#7C5CFF]/10 text-[#7C5CFF] border-[#7C5CFF]/30 shadow-[0_0_10px_rgba(124,92,255,0.2)]';
+        return 'bg-[#3BCBFF]/10 text-[#3BCBFF] border-[#3BCBFF]/30 shadow-[0_0_12px_rgba(59,203,255,0.2)]';
       case 'Admin':
-        return 'bg-rose-500/10 text-rose-400 border-rose-500/30';
+        return 'bg-[#FF8761]/10 text-[#FF8761] border-[#FF8761]/30';
       default:
         return 'bg-slate-800 text-slate-300 border-slate-700';
     }
   };
 
   return (
-    <header className="h-16 border-b border-[#7C5CFF]/20 bg-[#0F1326]/80 backdrop-blur-xl px-6 flex items-center justify-between shrink-0 select-none z-30">
+    <header className="h-16 border-b border-white/10 bg-[#10252E]/60 backdrop-blur-2xl px-6 flex items-center justify-between shrink-0 select-none z-30 m-3 my-0 rounded-2xl">
       {/* Global Search Bar with Ctrl+K trigger */}
       <div 
         onClick={onOpenCmdPalette}
         className="relative w-80 md:w-96 cursor-pointer group"
       >
-        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-hover:text-[#00E5FF] transition-colors" />
+        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-hover:text-[#4DFFB4] transition-colors" />
         <input
           type="text"
           readOnly
-          placeholder="Global AI Search claims, policies, logs..."
+          placeholder="Search claims, policies, audit logs (Ctrl+K)..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-[#151B34] border border-[#7C5CFF]/20 group-hover:border-[#00E5FF]/50 rounded-xl pl-9 pr-14 py-2 text-xs text-white placeholder-slate-400 focus:outline-none transition-all shadow-inner cursor-pointer"
+          className="w-full bg-[#081018]/80 border border-white/10 group-hover:border-[#4DFFB4]/50 rounded-xl pl-9 pr-14 py-2 text-xs text-white placeholder-slate-400 focus:outline-none transition-all shadow-inner cursor-pointer"
         />
-        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-slate-400 bg-[#060816] px-1.5 py-0.5 rounded border border-slate-700 font-mono">
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-slate-400 bg-[#10252E] px-1.5 py-0.5 rounded-md border border-white/10 font-mono">
           <Command className="w-3 h-3" />
           <span>K</span>
         </div>
@@ -41,15 +41,15 @@ export default function Header({ searchQuery, setSearchQuery, currentUser, onLog
       {/* Header Actions */}
       <div className="flex items-center gap-3">
         {/* Environment AI Status Badge */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-[#151B34] border border-[#00E5FF]/30 text-xs text-[#00E5FF] font-mono shadow-[0_0_15px_rgba(0,229,255,0.15)]">
-          <Cpu className="w-3.5 h-3.5 text-[#00E5FF] animate-pulse" />
+        <div className="hidden lg:flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#081018]/80 border border-[#4DFFB4]/30 text-xs text-[#4DFFB4] font-mono shadow-[0_0_15px_rgba(77,255,180,0.15)]">
+          <Cpu className="w-3.5 h-3.5 text-[#4DFFB4] animate-pulse" />
           <span>Azure OpenAI GPT-5.6-sol</span>
         </div>
 
         {/* Primary CTA */}
         <button
           onClick={onNewClaimClick}
-          className="bg-gradient-to-r from-[#00E5FF] to-[#7C5CFF] hover:from-[#00E5FF]/90 hover:to-[#7C5CFF]/90 text-[#060816] font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.3)] transition-all transform hover:scale-105"
+          className="bg-gradient-to-r from-[#4DFFB4] via-[#3BCBFF] to-[#FF8761] hover:opacity-90 text-[#081018] font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-2 shadow-[0_0_25px_rgba(77,255,180,0.35)] transition-all transform hover:scale-105"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>File New Claim</span>

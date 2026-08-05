@@ -118,77 +118,76 @@ export default function AuthView({ onLoginSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#060816] aurora-bg text-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-sans select-none">
-      {/* Background Cyber Grid & Scanline */}
-      <div className="absolute inset-0 cyber-grid opacity-30 pointer-events-none"></div>
-      <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#00E5FF] to-transparent animate-scanline opacity-40 pointer-events-none"></div>
-      <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-[#00E5FF]/10 blur-3xl pointer-events-none animate-pulse-glow"></div>
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-[#7C5CFF]/10 blur-3xl pointer-events-none animate-pulse-glow"></div>
+    <div className="min-h-screen bg-[#081018] biolum-bg text-[#F5F8FF] flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-sans select-none">
+      {/* Floating Bioluminescent Particle Elements */}
+      <div className="absolute top-12 left-20 w-4 h-4 rounded-full bg-[#4DFFB4] blur-sm animate-float opacity-60 shadow-[0_0_20px_#4DFFB4]"></div>
+      <div className="absolute bottom-24 right-32 w-6 h-6 rounded-full bg-[#3BCBFF] blur-sm animate-float opacity-50 shadow-[0_0_25px_#3BCBFF]"></div>
+      <div className="absolute top-1/3 right-1/4 w-3 h-3 rounded-full bg-[#FF8761] blur-xs animate-float opacity-40 shadow-[0_0_15px_#FF8761]"></div>
 
-      {/* Main Container Card */}
-      <div className="w-full max-w-5xl stripe-card bg-[#0F1326]/90 border border-[#00E5FF]/30 rounded-3xl shadow-[0_0_60px_rgba(0,229,255,0.15)] overflow-hidden grid grid-cols-1 lg:grid-cols-12 backdrop-blur-2xl z-10">
+      {/* Main Glassmorphic Container */}
+      <div className="w-full max-w-5xl stripe-card bg-[#10252E]/70 border border-[#4DFFB4]/30 rounded-3xl shadow-[0_0_80px_rgba(77,255,180,0.15)] overflow-hidden grid grid-cols-1 lg:grid-cols-12 backdrop-blur-2xl z-10">
         
         {/* Left Side: Animated AI Globe & Insurance Network (5 columns) */}
-        <div className="lg:col-span-5 p-8 lg:p-10 bg-gradient-to-b from-[#151B34] to-[#0F1326] border-r border-[#7C5CFF]/20 flex flex-col justify-between relative overflow-hidden">
+        <div className="lg:col-span-5 p-8 lg:p-10 bg-gradient-to-b from-[#10252E] to-[#081018] border-r border-white/10 flex flex-col justify-between relative overflow-hidden">
           <div className="space-y-6 relative z-10">
             {/* Brand Header */}
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#00E5FF] via-[#7C5CFF] to-[#FF5FEA] flex items-center justify-center text-[#060816] shadow-[0_0_20px_rgba(0,229,255,0.4)] font-bold">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#4DFFB4] via-[#3BCBFF] to-[#FF8761] flex items-center justify-center text-[#081018] shadow-[0_0_25px_rgba(77,255,180,0.4)] font-bold">
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
                 <div className="font-extrabold text-lg text-white tracking-tight flex items-center gap-2">
-                  GlobalClaims <span className="text-[#00E5FF] text-xs px-2 py-0.5 rounded-md bg-[#00E5FF]/10 border border-[#00E5FF]/30 font-mono">AI OS</span>
+                  GlobalClaims <span className="text-[#4DFFB4] text-xs px-2 py-0.5 rounded-full bg-[#4DFFB4]/10 border border-[#4DFFB4]/30 font-mono">AI OS</span>
                 </div>
-                <p className="text-xs text-[#00E5FF] font-semibold">Autonomous GenAI Claims Operating System</p>
+                <p className="text-xs text-[#3BCBFF] font-semibold">Autonomous GenAI Claims Operating System</p>
               </div>
             </div>
 
             {/* Futuristic 3D AI Globe & Insurance Circuit Graphic */}
             <div className="relative w-full py-6 flex items-center justify-center">
-              <div className="absolute inset-0 bg-gradient-to-r from-[#00E5FF]/20 via-[#7C5CFF]/20 to-[#FF5FEA]/20 rounded-full blur-3xl pointer-events-none"></div>
-              <svg className="w-48 h-48 drop-shadow-[0_0_25px_rgba(0,229,255,0.4)] relative z-10 animate-pulse-glow" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#4DFFB4]/20 via-[#3BCBFF]/20 to-[#FF8761]/20 rounded-full blur-3xl pointer-events-none"></div>
+              <svg className="w-48 h-48 drop-shadow-[0_0_30px_rgba(77,255,180,0.4)] relative z-10 animate-float" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                   <linearGradient id="aiGlobeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#00E5FF" />
-                    <stop offset="50%" stopColor="#7C5CFF" />
-                    <stop offset="100%" stopColor="#FF5FEA" />
+                    <stop offset="0%" stopColor="#4DFFB4" />
+                    <stop offset="50%" stopColor="#3BCBFF" />
+                    <stop offset="100%" stopColor="#FF8761" />
                   </linearGradient>
                 </defs>
                 <circle cx="100" cy="100" r="70" stroke="url(#aiGlobeGrad)" strokeWidth="2" strokeDasharray="6 4" />
-                <ellipse cx="100" cy="100" rx="70" ry="25" stroke="#00E5FF" strokeWidth="1.5" opacity="0.6" />
-                <ellipse cx="100" cy="100" rx="25" ry="70" stroke="#7C5CFF" strokeWidth="1.5" opacity="0.6" />
+                <ellipse cx="100" cy="100" rx="70" ry="25" stroke="#4DFFB4" strokeWidth="1.5" opacity="0.6" />
+                <ellipse cx="100" cy="100" rx="25" ry="70" stroke="#3BCBFF" strokeWidth="1.5" opacity="0.6" />
                 
                 {/* Central AI Nucleus */}
-                <circle cx="100" cy="100" r="18" fill="#151B34" stroke="#00E5FF" strokeWidth="2.5" />
-                <circle cx="100" cy="100" r="8" fill="#00E5FF" />
+                <circle cx="100" cy="100" r="18" fill="#10252E" stroke="#4DFFB4" strokeWidth="2.5" />
+                <circle cx="100" cy="100" r="8" fill="#4DFFB4" />
                 
                 {/* Orbiting Policy Node Signals */}
-                <circle cx="30" cy="100" r="6" fill="#34F5C5" />
-                <circle cx="170" cy="100" r="6" fill="#FF8A5B" />
-                <circle cx="100" cy="30" r="6" fill="#00E5FF" />
-                <circle cx="100" cy="170" r="6" fill="#FF5FEA" />
+                <circle cx="30" cy="100" r="6" fill="#4DFFB4" />
+                <circle cx="170" cy="100" r="6" fill="#FF8761" />
+                <circle cx="100" cy="30" r="6" fill="#3BCBFF" />
+                <circle cx="100" cy="170" r="6" fill="#FFC857" />
 
-                <line x1="36" y1="100" x2="82" y2="100" stroke="#34F5C5" strokeWidth="1.5" strokeDasharray="2 2" />
-                <line x1="118" y1="100" x2="164" y2="100" stroke="#FF8A5B" strokeWidth="1.5" strokeDasharray="2 2" />
-                <line x1="100" y1="36" x2="100" y2="82" stroke="#00E5FF" strokeWidth="1.5" strokeDasharray="2 2" />
-                <line x1="100" y1="118" x2="100" y2="164" stroke="#FF5FEA" strokeWidth="1.5" strokeDasharray="2 2" />
+                <line x1="36" y1="100" x2="82" y2="100" stroke="#4DFFB4" strokeWidth="1.5" strokeDasharray="2 2" />
+                <line x1="118" y1="100" x2="164" y2="100" stroke="#FF8761" strokeWidth="1.5" strokeDasharray="2 2" />
+                <line x1="100" y1="36" x2="100" y2="82" stroke="#3BCBFF" strokeWidth="1.5" strokeDasharray="2 2" />
+                <line x1="100" y1="118" x2="100" y2="164" stroke="#FFC857" strokeWidth="1.5" strokeDasharray="2 2" />
               </svg>
             </div>
 
-            {/* 3 Active AI Badges */}
+            {/* 3 Feature Badges */}
             <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00E5FF]/10 border border-[#00E5FF]/30 text-[#00E5FF] text-xs font-semibold font-mono shadow-[0_0_10px_rgba(0,229,255,0.2)]">
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4DFFB4]/10 border border-[#4DFFB4]/30 text-[#4DFFB4] text-xs font-semibold font-mono shadow-[0_0_12px_rgba(77,255,180,0.2)]">
                 <Check className="w-3.5 h-3.5" />
-                <span>Azure OpenAI GPT-5.6</span>
+                <span>Azure OpenAI</span>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#7C5CFF]/10 border border-[#7C5CFF]/30 text-[#7C5CFF] text-xs font-semibold font-mono shadow-[0_0_10px_rgba(124,92,255,0.2)]">
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#3BCBFF]/10 border border-[#3BCBFF]/30 text-[#3BCBFF] text-xs font-semibold font-mono shadow-[0_0_12px_rgba(59,203,255,0.2)]">
                 <Check className="w-3.5 h-3.5" />
-                <span>Azure RAG Search</span>
+                <span>Azure AI Search</span>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#34F5C5]/10 border border-[#34F5C5]/30 text-[#34F5C5] text-xs font-semibold font-mono shadow-[0_0_10px_rgba(52,245,197,0.2)]">
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF8761]/10 border border-[#FF8761]/30 text-[#FF8761] text-xs font-semibold font-mono shadow-[0_0_12px_rgba(255,135,97,0.2)]">
                 <Check className="w-3.5 h-3.5" />
-                <span>Doc Intelligence</span>
+                <span>Document Intelligence</span>
               </div>
             </div>
           </div>

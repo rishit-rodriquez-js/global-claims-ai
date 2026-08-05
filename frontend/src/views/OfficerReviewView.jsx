@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   UserCheck, 
   CheckCircle2, 
@@ -8,7 +8,8 @@ import {
   ShieldAlert, 
   BrainCircuit, 
   SearchCode,
-  AlertCircle
+  AlertCircle,
+  Command
 } from 'lucide-react';
 import { reviewClaimApi } from '../services/api.js';
 import DocumentExtractionReport from '../components/DocumentExtractionReport.jsx';
@@ -48,6 +49,27 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
       setErrorMessage(`Officer review error: ${err.message}`);
     }
   };
+
+  // Power User Keyboard Shortcuts (Shift+A, Shift+R, Shift+I)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.shiftKey && e.key.toUpperCase() === 'A') {
+        e.preventDefault();
+        handleDecision('APPROVE');
+      } else if (e.shiftKey && e.key.toUpperCase() === 'R') {
+        e.preventDefault();
+        handleDecision('REJECT');
+      } else if (e.shiftKey && e.key.toUpperCase() === 'I') {
+        e.preventDefault();
+        handleDecision('REQUEST_INFO');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeClaim, officerNotes]);
 
   if (!activeClaim) {
     return (

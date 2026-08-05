@@ -144,11 +144,12 @@ export default function App() {
   const effectiveTab = (isCustomer && (currentTab === 'officer' || currentTab === 'audit')) ? 'dashboard' : currentTab;
 
   return (
-    <div className="flex h-screen bg-[#060816] aurora-bg text-slate-100 overflow-hidden font-sans relative">
-      {/* Background Cyber Grid */}
-      <div className="absolute inset-0 cyber-grid opacity-20 pointer-events-none"></div>
+    <div className="flex h-screen bg-[#081018] biolum-bg text-[#F5F8FF] overflow-hidden font-sans relative">
+      {/* Bioluminescent Floating Particles */}
+      <div className="absolute top-10 left-1/3 w-3 h-3 rounded-full bg-[#4DFFB4] blur-xs animate-float opacity-40 pointer-events-none"></div>
+      <div className="absolute bottom-16 right-1/4 w-4 h-4 rounded-full bg-[#3BCBFF] blur-xs animate-float opacity-30 pointer-events-none"></div>
 
-      {/* Sidebar */}
+      {/* Floating Pill Sidebar */}
       <Sidebar 
         currentTab={effectiveTab} 
         setCurrentTab={setCurrentTab} 
