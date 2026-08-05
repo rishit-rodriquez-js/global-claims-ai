@@ -10,25 +10,40 @@ import {
   SearchCode,
   AlertCircle
 } from 'lucide-react';
+import { reviewClaimApi } from '../services/api.js';
 
-export default function OfficerReviewView({ claims = [], onUpdateClaimStatus }) {
+export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, currentUser }) {
   const pendingClaims = claims.filter(c => c.status === 'Human Review');
   const [selectedClaimId, setSelectedClaimId] = useState(pendingClaims[0]?.id || claims[0]?.id);
   const [officerNotes, setOfficerNotes] = useState('');
   const [statusMessage, setStatusMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const activeClaim = claims.find(c => c.id === selectedClaimId) || claims[0];
 
-  const handleDecision = (action) => {
+  const handleDecision = async (action) => {
     if (!activeClaim) return;
     let newStatus = 'Approved';
     if (action === 'REJECT') newStatus = 'Rejected';
     if (action === 'REQUEST_INFO') newStatus = 'Human Review';
 
-    onUpdateClaimStatus(activeClaim.id, newStatus, officerNotes);
-    setStatusMessage(`Claim ${activeClaim.id} updated to ${newStatus} with officer signature.`);
-    setOfficerNotes('');
-    setTimeout(() => setStatusMessage(null), 4000);
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      // REAL BACKEND API CALL -> POST /api/claims/{id}/review
+      await reviewClaimApi(activeClaim.id, newStatus, officerNotes, currentUser?.id || 'USR-801');
+      onUpdateClaimStatus(activeClaim.id, newStatus, officerNotes);
+
+      setStatusMessage(`Claim ${activeClaim.id} updated to ${newStatus} in Azure SQL database.`);
+      setOfficerNotes('');
+      setIsSubmitting(false);
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err) {
+      setIsSubmitting(false);
+      setErrorMessage(`Officer review error: ${err.message}`);
+    }
   };
 
   if (!activeClaim) {
@@ -81,9 +96,16 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus }) 
         </div>
       )}
 
+      {errorMessage && (
+        <div class="p-4 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
+          <AlertCircle class="w-4 h-4" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       {/* Split Review Workspace */}
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Pane: Claim Details & Document Viewer (5 cols) */}
+        {/* Left Pane: Claim Details & Document Viewer */}
         <div class="lg:col-span-5 space-y-4">
           <div class="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
             <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
@@ -117,17 +139,12 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus }) 
             <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
               <FileText class="w-8 h-8 text-blue-400 mx-auto" />
               <p class="text-xs font-semibold text-white font-mono">{activeClaim.documentName}</p>
-              <p class="text-[11px] text-slate-500">OCR Extraction Completed (100% field coverage)</p>
-              <div class="pt-2">
-                <button class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 rounded-lg">
-                  View Full Document PDF
-                </button>
-              </div>
+              <p class="text-[11px] text-slate-500">OCR Extraction Completed via Azure Doc Intelligence</p>
             </div>
           </div>
         </div>
 
-        {/* Right Pane: AI Recommendation & Action Buttons (7 cols) */}
+        {/* Right Pane: AI Recommendation & Action Buttons */}
         <div class="lg:col-span-7 space-y-4">
           <div class="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
             <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
@@ -149,7 +166,6 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus }) 
                   <ShieldAlert class="w-4 h-4 text-emerald-400" /> Fraud Risk Score
                 </span>
                 <p class="text-2xl font-bold font-mono text-white">{activeClaim.fraudRisk}</p>
-                <p class="text-[10px] text-slate-400">Duplicate invoice check cleared</p>
               </div>
             </div>
 
@@ -183,24 +199,27 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus }) 
 
               <div class="grid grid-cols-3 gap-3 pt-1">
                 <button
+                  disabled={isSubmitting}
                   onClick={() => handleDecision('APPROVE')}
-                  class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow transition-all"
+                  class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow transition-all disabled:opacity-50"
                 >
                   <CheckCircle2 class="w-4 h-4" />
                   <span>Approve Claim</span>
                 </button>
 
                 <button
+                  disabled={isSubmitting}
                   onClick={() => handleDecision('REJECT')}
-                  class="py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow transition-all"
+                  class="py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow transition-all disabled:opacity-50"
                 >
                   <XCircle class="w-4 h-4" />
                   <span>Reject Claim</span>
                 </button>
 
                 <button
+                  disabled={isSubmitting}
                   onClick={() => handleDecision('REQUEST_INFO')}
-                  class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-all"
+                  class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                 >
                   <HelpCircle class="w-4 h-4 text-amber-400" />
                   <span>Request Info</span>

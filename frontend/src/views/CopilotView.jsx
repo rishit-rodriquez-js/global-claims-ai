@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { Bot, Send, Sparkles, User, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Bot, Send, Sparkles, User, ShieldCheck } from 'lucide-react';
+import { sendCopilotChat } from '../services/api.js';
 
-export default function CopilotView({ claims = [] }) {
+export default function CopilotView() {
   const [messages, setMessages] = useState([
     {
       sender: 'copilot',
-      text: "Hello! I am your **GlobalClaims AI Copilot**, connected to your Azure AI Search policy vector store and claims database. How can I assist you today?",
+      text: "Hello! I am your **GlobalClaims AI Copilot**, connected to your Azure AI Search policy vector store and Azure OpenAI (gpt-5.6-sol) reasoning engine. How can I assist you today?",
       citations: ["Azure AI Search Index", "GlobalClaims Audit Log"]
     }
   ]);
   const [inputQuery, setInputQuery] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
 
   const sampleQuestions = [
     "Why was claim CLM-8922 escalated to Human Review?",
@@ -18,33 +20,34 @@ export default function CopilotView({ claims = [] }) {
     "Summarize fraud indicators for claim CLM-8921"
   ];
 
-  const handleSend = (queryText) => {
+  const handleSend = async (queryText) => {
     const textToSend = queryText || inputQuery;
     if (!textToSend.trim()) return;
 
     const userMsg = { sender: 'user', text: textToSend };
     setMessages((prev) => [...prev, userMsg]);
     setInputQuery('');
+    setIsThinking(true);
 
-    // Generate intelligent grounded response
-    setTimeout(() => {
-      let replyText = "I queried Azure AI Search and retrieved matching policy clauses. All responses are strictly grounded in your active policy dataset without hallucination.";
-      let citations = ["Azure AI Search (insurance-policies-index)"];
-
-      if (textToSend.includes("CLM-8922")) {
-        replyText = "Claim **CLM-8922** (Sophia Martinez, $8,200.00) was escalated because the auto repair estimate included **$3,200.00 in aftermarket performance parts** (sport exhaust system) not registered under Endorsement A-MOD. This dropped the AI decision confidence to **78.2%**, which triggers mandatory Claims Officer escalation under our < 90% threshold guardrail.";
-        citations = ["Claim CLM-8922 JSON", "Section A-302 (Custom Accessories)"];
-      } else if (textToSend.includes("H-104") || textToSend.includes("emergency")) {
-        replyText = "Under **Section H-104 (Health Standard)**, outpatient emergency medical care is covered up to **$2,500.00 per event** subject to a $100 copay. Emergency diagnostic X-rays and consultations fall under this clause when billed by accredited hospital systems.";
-        citations = ["health_policy_standard.pdf (Section H-104)"];
-      } else if (textToSend.includes("rate") || textToSend.includes("SLA")) {
-        replyText = "Our platform is currently operating at an **auto-approval rate of 66.7%** with an average end-to-end processing time of **4.8 seconds** (Document Intelligence OCR -> RAG Search -> GPT-4o Decision).";
-        citations = ["Dashboard System Health Matrix"];
-      }
-
-      const aiMsg = { sender: 'copilot', text: replyText, citations };
+    try {
+      // REAL BACKEND API CALL -> POST /api/copilot/chat -> Azure OpenAI + Azure AI Search
+      const res = await sendCopilotChat(textToSend);
+      const aiMsg = {
+        sender: 'copilot',
+        text: res.reply || "Grounded reasoning engine evaluated active policy clauses.",
+        citations: res.citations || ["Azure AI Search (insurance-policies-index)"]
+      };
       setMessages((prev) => [...prev, aiMsg]);
-    }, 600);
+      setIsThinking(false);
+    } catch (err) {
+      const errMsg = {
+        sender: 'copilot',
+        text: "Error querying Azure OpenAI & Azure AI Search engine.",
+        citations: ["System Log"]
+      };
+      setMessages((prev) => [...prev, errMsg]);
+      setIsThinking(false);
+    }
   };
 
   return (
@@ -58,7 +61,7 @@ export default function CopilotView({ claims = [] }) {
           <div>
             <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
               Microsoft Copilot Insurance Assistant
-              <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 font-mono border border-indigo-500/30">Grounded RAG</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 font-mono border border-indigo-500/30">Azure OpenAI GPT-5.6-sol</span>
             </h1>
             <p class="text-xs text-slate-400">Ask natural language questions about claims, policy terms, and fraud analysis</p>
           </div>
@@ -116,6 +119,13 @@ export default function CopilotView({ claims = [] }) {
             </div>
           </div>
         ))}
+
+        {isThinking && (
+          <div class="flex items-center gap-2 text-xs text-indigo-400 font-mono italic p-2">
+            <Bot class="w-4 h-4 animate-spin" />
+            <span>Azure OpenAI reasoning in progress...</span>
+          </div>
+        )}
       </div>
 
       {/* Input Box */}

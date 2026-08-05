@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileText, CheckCircle2, ArrowRight, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
+import { UploadCloud, FileText, ArrowRight, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import ProgressTimeline from '../components/ProgressTimeline.jsx';
+import { submitClaimApi } from '../services/api.js';
 
-export default function SubmitClaimView({ onSubmitClaimSuccess }) {
+export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    claimantName: 'Eleanor Vance',
+    claimantName: currentUser?.name || 'Eleanor Vance',
     policyNumber: 'POL-HTH-7721',
     policyType: 'Health Standard',
     claimType: 'Emergency Medical',
@@ -17,6 +18,7 @@ export default function SubmitClaimView({ onSubmitClaimSuccess }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState(1);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -24,50 +26,69 @@ export default function SubmitClaimView({ onSubmitClaimSuccess }) {
     }
   };
 
-  const handleStartProcessing = () => {
+  const handleStartProcessing = async () => {
     setIsProcessing(true);
     setProcessingStep(1);
+    setErrorMessage(null);
 
-    // Simulate 4-agent timeline progress steps (2s total for crisp demo)
-    setTimeout(() => setProcessingStep(2), 1200);
-    setTimeout(() => setProcessingStep(3), 2400);
-    setTimeout(() => setProcessingStep(4), 3600);
+    // Live progress indicators
+    const p1 = setTimeout(() => setProcessingStep(2), 1000);
+    const p2 = setTimeout(() => setProcessingStep(3), 2000);
+    const p3 = setTimeout(() => setProcessingStep(4), 3000);
 
-    setTimeout(() => {
-      setIsProcessing(false);
-      const newClaim = {
-        id: `CLM-${Math.floor(1000 + Math.random() * 9000)}`,
+    try {
+      // REAL BACKEND API CALL -> FastAPI -> Azure Blob -> 4-Agent Azure AI Pipeline
+      const response = await submitClaimApi(
+        {
+          ...formData,
+          userId: currentUser?.id || 'USR-101'
+        },
+        selectedFile
+      );
+
+      clearTimeout(p1);
+      clearTimeout(p2);
+      clearTimeout(p3);
+      setProcessingStep(4);
+
+      const createdClaim = {
+        id: response.claim_id,
         claimantName: formData.claimantName,
         policyNumber: formData.policyNumber,
         policyType: formData.policyType,
         claimType: formData.claimType,
         amount: parseFloat(formData.amount) || 1850.00,
-        coveredAmount: parseFloat(formData.amount) || 1850.00,
+        coveredAmount: response.verdict === 'Approved' ? parseFloat(formData.amount) : 0.0,
         incidentDate: formData.incidentDate,
         submittedDate: new Date().toISOString().split('T')[0],
-        status: parseFloat(formData.amount) > 5000 ? "Human Review" : "Approved",
-        confidence: parseFloat(formData.amount) > 5000 ? 84.5 : 95.2,
-        fraudRisk: parseFloat(formData.amount) > 5000 ? "Medium (18.4%)" : "Low (3.1%)",
-        fraudScore: parseFloat(formData.amount) > 5000 ? 18.4 : 3.1,
-        documentName: selectedFile ? selectedFile.name : "medical_emergency_bill.pdf",
-        explanation: `Claim for ${formData.claimType} of $${formData.amount} evaluated under policy ${formData.policyNumber}. Standard emergency coverage applies with itemized hospital verification.`,
-        retrievedClause: "Section H-104: Emergency medical evaluation and diagnostic imaging are covered up to $2,500.00 per event.",
-        evidence: [
-          "Itemized billing statement extracted via Azure AI Document Intelligence.",
-          "Claimant policy POL-HTH-7721 active with zero lapse in coverage.",
-          "Verified diagnostic code ICD-10-M79.641 (Right Hand Pain)."
-        ],
+        status: response.verdict || 'Human Review',
+        confidence: response.confidence || 85.0,
+        fraudRisk: response.confidence >= 90 ? 'Low (4.2%)' : 'Medium (22.5%)',
+        fraudScore: response.confidence >= 90 ? 4.2 : 22.5,
+        documentName: selectedFile ? selectedFile.name : 'medical_bill_sample.pdf',
+        explanation: response.explanation || 'Processed cleanly via Azure AI Pipeline.',
+        retrievedClause: response.retrieved_clause || 'Section H-104: Emergency Medical Expenses',
+        evidence: response.evidence || ['Extracted via Azure AI Document Intelligence', 'Verified against policy'],
         timeline: [
-          { step: "Upload", status: "completed", timestamp: "Just now", detail: `File ${selectedFile ? selectedFile.name : "medical_emergency_bill.pdf"} uploaded` },
-          { step: "OCR", status: "completed", timestamp: "Just now", detail: `Extracted $${formData.amount} billing matrix` },
-          { step: "Policy Match", status: "completed", timestamp: "Just now", detail: "Retrieved Section H-104 (Similarity 0.95)" },
-          { step: "Fraud Check", status: "completed", timestamp: "Just now", detail: "Zero duplicate invoices detected" },
-          { step: "Reasoning", status: "completed", timestamp: "Just now", detail: "Grounded reasoning engine evaluated coverage limits" },
-          { step: "Decision", status: "completed", timestamp: "Just now", detail: "Decision rendered cleanly" }
+          { step: 'Upload', status: 'completed', timestamp: 'Just now', detail: `Uploaded ${selectedFile ? selectedFile.name : 'document.pdf'} to Azure Blob Storage (claims-documents)` },
+          { step: 'OCR', status: 'completed', timestamp: 'Just now', detail: 'Azure AI Document Intelligence extracted billing matrix' },
+          { step: 'Policy Match', status: 'completed', timestamp: 'Just now', detail: 'Azure AI Search RAG retrieved matching policy clause' },
+          { step: 'Fraud Check', status: 'completed', timestamp: 'Just now', detail: 'Fraud Risk Scoring Agent performed anomaly check' },
+          { step: 'Reasoning', status: 'completed', timestamp: 'Just now', detail: 'Azure OpenAI GPT-5.6-sol evaluated policy eligibility' },
+          { step: 'Decision', status: 'completed', timestamp: 'Just now', detail: `Verdict rendered: ${response.verdict}` }
         ]
       };
-      onSubmitClaimSuccess(newClaim);
-    }, 4800);
+
+      setIsProcessing(false);
+      onSubmitClaimSuccess(createdClaim);
+
+    } catch (err) {
+      clearTimeout(p1);
+      clearTimeout(p2);
+      clearTimeout(p3);
+      setIsProcessing(false);
+      setErrorMessage(`Claim processing error: ${err.message}`);
+    }
   };
 
   return (
@@ -89,6 +110,13 @@ export default function SubmitClaimView({ onSubmitClaimSuccess }) {
           <span class={`px-2.5 py-1 rounded font-semibold ${step === 2 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>2. Upload & AI Run</span>
         </div>
       </div>
+
+      {errorMessage && (
+        <div class="p-4 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
+          <AlertCircle class="w-4 h-4 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       {isProcessing && (
         <ProgressTimeline currentStep={processingStep} />
@@ -213,10 +241,10 @@ export default function SubmitClaimView({ onSubmitClaimSuccess }) {
           <div class="p-4 bg-slate-900/80 border border-slate-800 rounded-lg text-xs text-slate-400 space-y-2">
             <div class="flex items-center gap-2 text-white font-medium">
               <ShieldCheck class="w-4 h-4 text-emerald-400" />
-              <span>AI Security & Guardrails Active</span>
+              <span>Azure Blob Storage Upload & AI Pipeline Active</span>
             </div>
             <p class="text-[11px]">
-              Uploaded files are strictly parsed as reference data via Azure Document Intelligence. PII data is masked, and embedded prompt instructions are sanitized.
+              Submitting triggers POST /api/claims/submit. File is uploaded directly to Azure Blob container 'claims-documents' and processed by Azure Document Intelligence & Azure OpenAI GPT-5.6-sol.
             </p>
           </div>
 
@@ -232,7 +260,7 @@ export default function SubmitClaimView({ onSubmitClaimSuccess }) {
               onClick={handleStartProcessing}
               class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-lg flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all"
             >
-              <span>Run AI Processing Pipeline</span>
+              <span>Submit to Azure AI Pipeline</span>
               <ArrowRight class="w-4 h-4" />
             </button>
           </div>

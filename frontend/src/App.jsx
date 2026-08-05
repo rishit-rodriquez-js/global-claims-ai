@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar.jsx';
 import Header from './components/Header.jsx';
 
@@ -8,15 +8,48 @@ import ClaimDetailView from './views/ClaimDetailView.jsx';
 import OfficerReviewView from './views/OfficerReviewView.jsx';
 import CopilotView from './views/CopilotView.jsx';
 import AuditTrailView from './views/AuditTrailView.jsx';
+import AuthView from './views/AuthView.jsx';
 
-import { INITIAL_CLAIMS, INITIAL_AUDIT_LOGS } from './data/mockData.js';
+import { fetchClaims, fetchAuditLogs } from './services/api.js';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState({
+    id: "USR-801",
+    name: "Senior Officer Sarah Vance",
+    email: "sarah.vance@globalclaims.ai",
+    role: "Claim Officer"
+  });
+
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const [claims, setClaims] = useState(INITIAL_CLAIMS);
-  const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
-  const [selectedClaim, setSelectedClaim] = useState(INITIAL_CLAIMS[0]);
+  const [claims, setClaims] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [selectedClaim, setSelectedClaim] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Fetch real live data from FastAPI backend on mount
+  const loadLiveData = async () => {
+    setIsLoadingData(true);
+    try {
+      const [claimsData, logsData] = await Promise.all([
+        fetchClaims(),
+        fetchAuditLogs()
+      ]);
+      setClaims(claimsData);
+      setAuditLogs(logsData);
+      if (claimsData.length > 0) {
+        setSelectedClaim(claimsData[0]);
+      }
+    } catch (err) {
+      console.error("Failed to load backend data:", err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLiveData();
+  }, []);
 
   const pendingReviewCount = claims.filter(c => c.status === 'Human Review').length;
 
@@ -26,43 +59,18 @@ export default function App() {
   };
 
   const handleSubmitClaimSuccess = (newClaim) => {
-    setClaims((prev) => [newClaim, ...prev]);
+    loadLiveData(); // Refresh live data from Azure SQL / SQLite backend
     setSelectedClaim(newClaim);
-
-    // Add audit record
-    const newAuditLog = {
-      id: `LOG-${Math.floor(1000 + Math.random() * 9000)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      agent: newClaim.confidence >= 90 ? "Decision Agent" : "Decision Agent (Escalated)",
-      claimId: newClaim.id,
-      action: newClaim.confidence >= 90 ? "AUTO_APPROVE" : "HUMAN_REVIEW_ESCALATION",
-      confidence: newClaim.confidence,
-      decision: newClaim.explanation,
-      evidence: newClaim.evidence[0] || "Itemized hospital bill verified.",
-      piiStatus: `Masked (Claimant: ${newClaim.claimantName.substring(0, 1)}. ****)`
-    };
-    setAuditLogs((prev) => [newAuditLog, ...prev]);
     setCurrentTab('detail');
   };
 
-  const handleUpdateClaimStatus = (claimId, newStatus, notes) => {
-    setClaims((prev) =>
-      prev.map((c) => (c.id === claimId ? { ...c, status: newStatus } : c))
-    );
-
-    const updatedLog = {
-      id: `LOG-${Math.floor(1000 + Math.random() * 9000)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      agent: "Human Claims Officer",
-      claimId: claimId,
-      action: `OFFICER_${newStatus.toUpperCase()}`,
-      confidence: 100.0,
-      decision: notes || `Officer manually set status to ${newStatus}.`,
-      evidence: "Human Officer Manual Signature & Rationale",
-      piiStatus: "Masked (Officer ID #8801)"
-    };
-    setAuditLogs((prev) => [updatedLog, ...prev]);
+  const handleUpdateClaimStatus = async (claimId, newStatus, notes) => {
+    await loadLiveData(); // Refresh live claims & audit logs from backend
   };
+
+  if (!currentUser) {
+    return <AuthView onLoginSuccess={(user) => { setCurrentUser(user); loadLiveData(); }} />;
+  }
 
   return (
     <div class="flex h-screen bg-[#0b0f19] text-slate-100 overflow-hidden font-sans">
@@ -78,6 +86,8 @@ export default function App() {
         <Header 
           searchQuery={searchQuery} 
           setSearchQuery={setSearchQuery} 
+          currentUser={currentUser}
+          onLogout={() => setCurrentUser(null)}
           onNewClaimClick={() => setCurrentTab('submit')} 
         />
 
@@ -95,13 +105,14 @@ export default function App() {
 
           {currentTab === 'submit' && (
             <SubmitClaimView 
+              currentUser={currentUser}
               onSubmitClaimSuccess={handleSubmitClaimSuccess}
             />
           )}
 
           {currentTab === 'detail' && (
             <ClaimDetailView 
-              claim={selectedClaim}
+              claim={selectedClaim || claims[0]}
               onBack={() => setCurrentTab('dashboard')}
               onNavigateOfficer={() => setCurrentTab('officer')}
             />
@@ -110,6 +121,7 @@ export default function App() {
           {currentTab === 'officer' && (
             <OfficerReviewView 
               claims={claims}
+              currentUser={currentUser}
               onUpdateClaimStatus={handleUpdateClaimStatus}
             />
           )}
