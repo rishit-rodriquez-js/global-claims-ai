@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import datetime
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
@@ -7,7 +8,13 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
+# Ensure root directory and backend directory are in sys.path
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 from database.db import init_db, get_db
+
 from database.models import ClaimModel, AuditLogModel, PolicyClauseModel
 from utils.guardrails import validate_uploaded_file
 from utils.pii_masker import mask_pii
@@ -19,10 +26,18 @@ from agents.decision_agent import run_decision_agent
 
 load_dotenv()
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
 app = FastAPI(
     title="GlobalClaims AI API",
     description="Automated & Explainable Insurance Claim Processing Platform API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -33,10 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database on startup
-@app.on_event("startup")
-def startup_event():
-    init_db()
+
 
 @app.get("/")
 def read_root():
