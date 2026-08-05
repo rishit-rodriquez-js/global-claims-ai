@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileText, ArrowRight, ArrowLeft, ShieldCheck, AlertCircle, Sparkles, CheckCircle } from 'lucide-react';
+import { UploadCloud, FileText, ArrowRight, ArrowLeft, ShieldCheck, AlertCircle, Sparkles, CheckCircle, FileCheck, CheckCircle2 } from 'lucide-react';
 import ProgressTimeline from '../components/ProgressTimeline.jsx';
 import { submitClaimApi, parseDocumentApi } from '../services/api.js';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
   const [step, setStep] = useState(1);

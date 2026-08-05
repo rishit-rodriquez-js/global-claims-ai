@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bot, Send, Sparkles, User, ShieldCheck } from 'lucide-react';
 import { sendCopilotChat } from '../services/api.js';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function CopilotView() {
   const [messages, setMessages] = useState([

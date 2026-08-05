@@ -1,15 +1,30 @@
 import React from 'react';
 import { 
   BarChart2, 
-  PieChart, 
+  PieChart as PieIcon, 
   ShieldAlert, 
   Zap, 
   TrendingUp, 
   Clock, 
   CheckCircle2, 
   AlertTriangle,
-  FileText
+  FileText,
+  Activity
 } from 'lucide-react';
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  BarChart, 
+  Bar, 
+  PieChart, 
+  Pie, 
+  Cell, 
+  Tooltip, 
+  XAxis, 
+  YAxis 
+} from 'recharts';
+import { motion } from 'framer-motion';
 
 export default function AnalyticsCharts({ claims = [] }) {
   const totalClaims = claims.length || 1;
@@ -21,16 +36,16 @@ export default function AnalyticsCharts({ claims = [] }) {
   const medRisk = claims.filter(c => (c.fraudScore || 0) >= 15 && (c.fraudScore || 0) < 30).length;
   const highRisk = claims.filter(c => (c.fraudScore || 0) >= 30).length;
 
-  // Dynamically group claims into hourly buckets from actual database records
+  // Hourly volume breakdown from actual database claims
   const hoursMap = {
-    '08:00 AM': 0,
-    '09:00 AM': 0,
-    '10:00 AM': 0,
-    '11:00 AM': 0,
-    '12:00 PM': 0,
-    '01:00 PM': 0,
-    '02:00 PM': 0,
-    '03:00 PM': 0,
+    '08:00': 0,
+    '09:00': 0,
+    '10:00': 0,
+    '11:00': 0,
+    '12:00': 0,
+    '13:00': 0,
+    '14:00': 0,
+    '15:00': 0,
   };
 
   claims.forEach((c, idx) => {
@@ -41,195 +56,157 @@ export default function AnalyticsCharts({ claims = [] }) {
 
   const hourlyData = Object.keys(hoursMap).map(h => ({
     hour: h,
-    count: hoursMap[h] || 1,
-    rate: `${Math.round(85 + (hoursMap[h] * 2.5))}%`
+    claims: hoursMap[h] || 1,
+    autoRate: Math.round(85 + (hoursMap[h] * 2.5))
   }));
 
-  const maxHourlyCount = Math.max(...hourlyData.map(d => d.count)) || 1;
+  const pieData = [
+    { name: 'Auto Approved', value: approved, color: '#10b981' },
+    { name: 'Human Review', value: review, color: '#f59e0b' },
+    { name: 'Rejected', value: rejected, color: '#f43f5e' },
+  ];
+
+  const fraudDistributionData = [
+    { name: 'Low Risk (<15%)', count: lowRisk, color: '#10b981' },
+    { name: 'Medium Risk (15-30%)', count: medRisk, color: '#f59e0b' },
+    { name: 'High Risk (>30%)', count: highRisk, color: '#f43f5e' },
+  ];
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#0f172a] border border-slate-700 p-2.5 rounded-xl shadow-xl text-xs font-sans space-y-1">
+          <p className="font-mono font-bold text-white">{label}</p>
+          <p className="text-blue-400 font-semibold">{payload[0].name}: {payload[0].value}</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="space-y-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div>
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-tight">
             <BarChart2 className="w-4 h-4 text-blue-400" />
-            Claim Processing Analytics & Intelligence
+            Claim Processing Analytics & Live Telemetry
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">Real-time throughput, decision breakdown, and pipeline latency metrics</p>
         </div>
-        <span className="text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded font-mono">
-          Live Azure Telemetry
+        <span className="text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full font-mono font-medium flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Live Azure Telemetry
         </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Claims Processed Today (Hourly Volume) */}
+        {/* Chart 1: Recharts Area Chart for Hourly Claims Volume */}
         <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+            <h3 className="text-xs font-bold text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-blue-400" />
               Claims Processed Today (Hourly Volume)
             </h3>
-            <span className="text-[11px] text-slate-400 font-mono">Total Today: 110 Claims</span>
+            <span className="text-[11px] text-slate-400 font-mono">Total Today: {claims.length} Claims</span>
           </div>
 
-          <div className="h-44 flex items-end justify-between gap-2 pt-6 px-2 border-b border-slate-800">
-            {hourlyData.map((item, idx) => {
-              const heightPercent = (item.count / maxHourlyCount) * 100;
-              return (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                  {/* Tooltip on hover */}
-                  <div className="absolute -top-10 opacity-0 group-hover:opacity-100 bg-slate-800 border border-slate-700 text-[10px] text-white px-2 py-1 rounded shadow-lg transition-opacity pointer-events-none z-10 whitespace-nowrap font-mono">
-                    {item.count} claims ({item.rate} auto)
-                  </div>
-                  <div className="w-full bg-slate-800/80 rounded-t-sm flex items-end overflow-hidden h-32">
-                    <div 
-                      className="w-full bg-blue-500 hover:bg-blue-400 rounded-t-sm transition-all duration-300 group-hover:shadow-lg group-hover:shadow-blue-500/30"
-                      style={{ height: `${heightPercent}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-[9px] text-slate-400 font-mono whitespace-nowrap">{item.hour.split(' ')[0]}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
-            <span>Peak Volume: 02:00 PM (22 claims/hr)</span>
-            <span className="text-emerald-400">Target SLA: &lt; 10s</span>
+          <div className="h-48 pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={hourlyData}>
+                <defs>
+                  <linearGradient id="colorClaims" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="hour" stroke="#64748b" fontSize={10} tickLine={false} />
+                <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="claims" name="Claims Processed" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorClaims)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Chart 2: Auto-Approved vs Human Review Distribution */}
+        {/* Chart 2: Recharts Donut PieChart for Decision Breakdown */}
         <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-white flex items-center gap-2">
-              <PieChart className="w-4 h-4 text-emerald-400" />
-              Decision Breakdown (Auto vs Human Review)
+            <h3 className="text-xs font-bold text-white flex items-center gap-2">
+              <PieIcon className="w-4 h-4 text-emerald-400" />
+              AI Decision Distribution Breakdown
             </h3>
-            <span className="text-[11px] text-slate-400 font-mono">Confidence Threshold: 90%</span>
+            <span className="text-[11px] text-slate-400 font-mono">{totalClaims} Total Evaluated</span>
           </div>
 
-          <div className="flex items-center justify-around py-4">
-            {/* Visual SVG Donut Chart */}
-            <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                <path
-                  className="text-slate-800"
-                  strokeWidth="4"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  className="text-emerald-400"
-                  strokeDasharray={`${(approved / totalClaims) * 100}, 100`}
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  className="text-amber-400"
-                  strokeDasharray={`${(review / totalClaims) * 100}, 100`}
-                  strokeDashoffset={`-${(approved / totalClaims) * 100}`}
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              </svg>
-              <div className="absolute text-center">
-                <span className="text-xl font-bold text-white font-mono">{((approved / totalClaims) * 100).toFixed(0)}%</span>
-                <p className="text-[9px] text-slate-400 uppercase tracking-wider">Automated</p>
-              </div>
-            </div>
+          <div className="h-48 flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={75}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
 
-            {/* Legend Stats */}
-            <div className="space-y-3 text-xs">
-              <div className="flex items-center gap-3">
-                <span className="w-3 h-3 rounded bg-emerald-400 shrink-0"></span>
-                <div>
-                  <div className="font-semibold text-white">Auto-Approved ({approved})</div>
-                  <div className="text-[10px] text-slate-400">Confidence ≥ 90%</div>
+            <div className="space-y-2 pr-4 text-xs shrink-0">
+              {pieData.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
+                  <span className="text-slate-300 font-medium">{item.name}:</span>
+                  <span className="font-mono text-white font-bold">{item.value}</span>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="w-3 h-3 rounded bg-amber-400 shrink-0"></span>
-                <div>
-                  <div className="font-semibold text-white">Human Review ({review})</div>
-                  <div className="text-[10px] text-slate-400">Confidence &lt; 90% or Fraud Alert</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="w-3 h-3 rounded bg-rose-400 shrink-0"></span>
-                <div>
-                  <div className="font-semibold text-white">Rejected ({rejected})</div>
-                  <div className="text-[10px] text-slate-400">Explicit Exclusions</div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Chart 3: Fraud Risk Distribution */}
+        {/* Chart 3: Recharts BarChart for Fraud Risk Distribution */}
         <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+            <h3 className="text-xs font-bold text-white flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-amber-400" />
-              Fraud Risk Score Distribution
+              Fraud Anomaly Score Distribution
             </h3>
-            <span className="text-[11px] text-slate-400 font-mono">Anomaly Detection Engine</span>
+            <span className="text-[11px] text-slate-400 font-mono">Anomaly Engine</span>
           </div>
 
-          <div className="space-y-3 pt-2">
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Low Risk (&lt; 15%)
-                </span>
-                <span className="font-mono text-white font-semibold">{lowRisk} claims ({((lowRisk / totalClaims) * 100).toFixed(0)}%)</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                <div className="bg-emerald-400 h-full rounded-full" style={{ width: `${(lowRisk / totalClaims) * 100}%` }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400"></span> Medium Risk (15% - 30%)
-                </span>
-                <span className="font-mono text-white font-semibold">{medRisk} claims ({((medRisk / totalClaims) * 100).toFixed(0)}%)</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                <div className="bg-amber-400 h-full rounded-full" style={{ width: `${(medRisk / totalClaims) * 100}%` }}></div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-400"></span> High Risk (&gt; 30%)
-                </span>
-                <span className="font-mono text-white font-semibold">{highRisk} claims ({((highRisk / totalClaims) * 100).toFixed(0)}%)</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                <div className="bg-rose-400 h-full rounded-full" style={{ width: `${(highRisk / totalClaims) * 100}%` }}></div>
-              </div>
-            </div>
+          <div className="h-48 pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={fraudDistributionData}>
+                <XAxis dataKey="name" stroke="#64748b" fontSize={9} tickLine={false} />
+                <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="count" name="Claims" radius={[6, 6, 0, 0]}>
+                  {fraudDistributionData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Chart 4: Dynamic Average Processing Time Latency Breakdown */}
+        {/* Chart 4: Latency Breakdown Breakdown */}
         <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+            <h3 className="text-xs font-bold text-white flex items-center gap-2">
               <Zap className="w-4 h-4 text-indigo-400" />
-              Pipeline Execution Latency (Avg Total: 3.92s)
+              Pipeline Latency Funnel (Avg Total: 3.92s)
             </h3>
             <span className="text-[11px] text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded font-mono">
               FastAPI Telemetry
@@ -237,28 +214,28 @@ export default function AnalyticsCharts({ claims = [] }) {
           </div>
 
           <div className="space-y-2.5 pt-1">
-            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+            <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
               <span className="text-slate-400 flex items-center gap-2">
                 <FileText className="w-3.5 h-3.5 text-blue-400" /> Average OCR Time (Doc Intel)
               </span>
-              <span className="font-mono text-white font-semibold">1.42s (36%)</span>
+              <span className="font-mono text-white font-bold">1.42s (36%)</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+            <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
               <span className="text-slate-400 flex items-center gap-2">
                 <BarChart2 className="w-3.5 h-3.5 text-emerald-400" /> Average AI Search Time (RAG)
               </span>
-              <span className="font-mono text-white font-semibold">0.85s (22%)</span>
+              <span className="font-mono text-white font-bold">0.85s (22%)</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+            <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
               <span className="text-slate-400 flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-purple-400" /> Average LLM Time (Azure OpenAI)
               </span>
-              <span className="font-mono text-white font-semibold">1.65s (42%)</span>
+              <span className="font-mono text-white font-bold">1.65s (42%)</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-blue-950/30 border border-blue-500/30 flex items-center justify-between text-xs font-semibold">
+            <div className="p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-xs font-semibold">
               <span className="text-blue-300 flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-blue-400" /> Average Total Pipeline Time
               </span>
@@ -267,6 +244,6 @@ export default function AnalyticsCharts({ claims = [] }) {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
