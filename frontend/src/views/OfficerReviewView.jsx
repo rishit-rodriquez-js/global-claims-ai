@@ -104,138 +104,136 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
         </div>
       )}
 
-      {/* Split Review Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Pane: Claim Details & Document Viewer */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
-              1. Submitted Claim File & Metadata
-            </h3>
+      {/* Vertical Review Workspace Flow */}
+      <div className="space-y-6">
+        {/* Section 1 (Top - Full Width): Submitted Claim File & Metadata */}
+        <div className="stripe-card p-6 border border-slate-800 bg-[#0f172a] space-y-5">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
+            1. Submitted Claim File & Metadata
+          </h3>
 
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Claim ID:</span>
-                <span className="font-mono text-blue-400 font-semibold">{activeClaim.id}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Patient / Claimant:</span>
-                <span className="font-semibold text-white">{activeClaim.claimantName}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Hospital / Facility:</span>
-                <span className="text-slate-200 font-medium">{activeClaim.hospitalName || 'Metro Health Medical Center'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Diagnosis / Treatment:</span>
-                <span className="text-blue-300 font-medium">{activeClaim.diagnosis || 'Acute Care Consultation'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Invoice Number:</span>
-                <span className="font-mono text-slate-300">{activeClaim.invoiceNumber || 'INV-9001'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Policy Number:</span>
-                <span className="font-mono text-slate-300">{activeClaim.policyNumber} ({activeClaim.policyType})</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Claim Amount:</span>
-                <span className="font-mono text-white font-bold">${activeClaim.amount.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">Submitted Date:</span>
-                <span className="text-slate-300">{activeClaim.submittedDate}</span>
-              </div>
+          {/* Metadata Summary Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
+            <div>
+              <span className="text-slate-400 block text-[11px]">Claim ID:</span>
+              <span className="font-mono text-blue-400 font-bold text-sm">{activeClaim.id}</span>
             </div>
-
-            {/* Document Extraction Report Component */}
-            <DocumentExtractionReport claim={activeClaim} />
+            <div>
+              <span className="text-slate-400 block text-[11px]">Patient / Claimant:</span>
+              <span className="font-semibold text-white">{activeClaim.claimantName}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[11px]">Hospital / Facility:</span>
+              <span className="text-slate-200 font-medium">{activeClaim.hospitalName || 'Metro Health Medical Center'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[11px]">Diagnosis / Treatment:</span>
+              <span className="text-blue-300 font-medium">{activeClaim.diagnosis || 'Acute Care Consultation'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[11px]">Invoice Number:</span>
+              <span className="font-mono text-slate-300">{activeClaim.invoiceNumber || 'INV-9001'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[11px]">Policy Number:</span>
+              <span className="font-mono text-slate-300">{activeClaim.policyNumber} ({activeClaim.policyType})</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[11px]">Claim Amount:</span>
+              <span className="font-mono text-white font-bold text-sm">${activeClaim.amount.toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[11px]">Submitted Date:</span>
+              <span className="text-slate-300">{activeClaim.submittedDate}</span>
+            </div>
           </div>
+
+          {/* Document Extraction Report Component (Full Width) */}
+          <DocumentExtractionReport claim={activeClaim} />
         </div>
 
-        {/* Right Pane: AI Recommendation & Action Buttons */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
-              2. AI Recommendation & Risk Analysis
-            </h3>
+        {/* Section 2 (Below Section 1 - Full Width): AI Recommendation & Risk Analysis */}
+        <div className="stripe-card p-6 border border-slate-800 bg-[#0f172a] space-y-5">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">
+            2. AI Recommendation & Risk Analysis
+          </h3>
 
-            {/* Confidence & Fraud Summary */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-1">
-                <span className="text-amber-400 font-semibold flex items-center gap-1.5">
-                  <BrainCircuit className="w-4 h-4" /> AI Confidence Score
-                </span>
-                <p className="text-2xl font-bold font-mono text-white">{activeClaim.confidence}%</p>
-                <p className="text-[10px] text-slate-400">
-                  {activeClaim.confidence >= 90 ? '≥ 90% Auto-Approval Threshold' : 'Below 90% Auto-Approval Threshold'}
-                </p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-semibold flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-emerald-400" /> Fraud Risk Score
-                </span>
-                <p className="text-2xl font-bold font-mono text-white">{activeClaim.fraudRisk}</p>
-              </div>
-            </div>
-
-            {/* AI Reason & Retrieved Policy Clause */}
-            <div className="space-y-2 text-xs">
-              <div className="font-semibold text-white flex items-center gap-1.5">
-                <SearchCode className="w-4 h-4 text-blue-400" /> RAG Retrieved Policy Citation
-              </div>
-              <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 text-blue-300 font-mono text-[11px]">
-                "{activeClaim.retrievedClause}"
-              </div>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="font-semibold text-white">AI Reason & Evaluation Log</div>
-              <p className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 text-slate-300 leading-relaxed">
-                {activeClaim.explanation}
+          {/* Confidence & Fraud Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
+              <span className="text-amber-400 font-semibold flex items-center gap-1.5 text-xs">
+                <BrainCircuit className="w-4 h-4" /> AI Confidence Score
+              </span>
+              <p className="text-3xl font-bold font-mono text-white">{activeClaim.confidence}%</p>
+              <p className="text-[11px] text-slate-400">
+                {activeClaim.confidence >= 90 ? '≥ 90% Auto-Approval Threshold' : 'Below 90% Auto-Approval Threshold'}
               </p>
             </div>
 
-            {/* Officer Decision Box */}
-            <div className="pt-4 border-t border-slate-800 space-y-3">
-              <label className="block text-xs font-semibold text-white">Claims Officer Decision Notes</label>
-              <textarea
-                rows="2"
-                placeholder="Enter mandatory reviewer rationale or notes..."
-                value={officerNotes}
-                onChange={(e) => setOfficerNotes(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-              ></textarea>
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+              <span className="text-slate-400 font-semibold flex items-center gap-1.5 text-xs">
+                <ShieldAlert className="w-4 h-4 text-emerald-400" /> Fraud Risk Score
+              </span>
+              <p className="text-3xl font-bold font-mono text-white">{activeClaim.fraudRisk}</p>
+              <p className="text-[11px] text-slate-500">Anomaly check against duplicate invoice hashes & velocity pattern</p>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-3 gap-3 pt-1">
-                <button
-                  disabled={isSubmitting}
-                  onClick={() => handleDecision('APPROVE')}
-                  className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow transition-all disabled:opacity-50"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Approve Claim</span>
-                </button>
+          {/* AI Reason & Retrieved Policy Clause */}
+          <div className="space-y-2 text-xs">
+            <div className="font-semibold text-white flex items-center gap-1.5">
+              <SearchCode className="w-4 h-4 text-blue-400" /> RAG Retrieved Policy Citation
+            </div>
+            <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-blue-300 font-mono text-xs leading-relaxed">
+              "{activeClaim.retrievedClause}"
+            </div>
+          </div>
 
-                <button
-                  disabled={isSubmitting}
-                  onClick={() => handleDecision('REJECT')}
-                  className="py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow transition-all disabled:opacity-50"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>Reject Claim</span>
-                </button>
+          <div className="space-y-2 text-xs">
+            <div className="font-semibold text-white">AI Reason & Evaluation Log</div>
+            <p className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 leading-relaxed text-xs">
+              {activeClaim.explanation}
+            </p>
+          </div>
 
-                <button
-                  disabled={isSubmitting}
-                  onClick={() => handleDecision('REQUEST_INFO')}
-                  className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
-                >
-                  <HelpCircle className="w-4 h-4 text-amber-400" />
-                  <span>Request Info</span>
-                </button>
-              </div>
+          {/* Officer Decision Box */}
+          <div className="pt-4 border-t border-slate-800 space-y-4">
+            <label className="block text-xs font-semibold text-white">Claims Officer Decision Notes</label>
+            <textarea
+              rows="3"
+              placeholder="Enter mandatory reviewer rationale or notes..."
+              value={officerNotes}
+              onChange={(e) => setOfficerNotes(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500"
+            ></textarea>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+              <button
+                disabled={isSubmitting}
+                onClick={() => handleDecision('APPROVE')}
+                className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow transition-all disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Approve Claim</span>
+              </button>
+
+              <button
+                disabled={isSubmitting}
+                onClick={() => handleDecision('REJECT')}
+                className="py-3 px-4 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow transition-all disabled:opacity-50"
+              >
+                <XCircle className="w-4 h-4" />
+                <span>Reject Claim</span>
+              </button>
+
+              <button
+                disabled={isSubmitting}
+                onClick={() => handleDecision('REQUEST_INFO')}
+                className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                <HelpCircle className="w-4 h-4 text-amber-400" />
+                <span>Request Info</span>
+              </button>
             </div>
           </div>
         </div>
