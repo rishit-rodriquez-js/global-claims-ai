@@ -6,11 +6,12 @@ def run_decision_agent(doc_res: dict, cov_res: dict, fraud_res: dict, claim_data
     """
     Agent 4: Decision Agent.
     Merges Extraction, RAG Policy Coverage, and Fraud Scoring into Recommendation, Confidence, Explanation, Evidence.
-    Uses Azure OpenAI GPT-4o if API key is provided.
+    Uses Azure OpenAI GPT-4o / GPT-5.6-sol if API key is provided.
     """
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    key = os.getenv("AZURE_OPENAI_KEY")
+    key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_KEY")
     deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+
 
     if endpoint and key and key != "your_azure_openai_key":
         try:

@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+from azure.storage.blob import BlobServiceClient
+import hashlib
+
 
 # Ensure root directory and backend directory are in sys.path
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -72,11 +75,78 @@ def get_users(db: Session = Depends(get_db)):
 @app.post("/api/users/login")
 def login_user(payload: dict, db: Session = Depends(get_db)):
     email = payload.get("email")
+    password = payload.get("password", "")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+
     user = db.query(UserModel).filter(UserModel.email == email).first()
-    if not user:
-        # Default fallback demo user
-        return {"status": "success", "user": {"id": "USR-801", "name": "Senior Officer Sarah Vance", "email": email, "role": "Claim Officer"}}
-    return {"status": "success", "user": {"id": user.id, "name": user.name, "email": user.email, "role": user.role}}
+
+    if user:
+        if user.password_hash and user.password_hash.startswith("sha256:"):
+            hashed_input = hashlib.sha256(password.encode()).hexdigest()
+            expected = user.password_hash.split(":", 1)[1]
+            if hashed_input != expected:
+                raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+        return {
+            "status": "success",
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "role": user.role,
+                "createdAt": user.created_at
+            }
+        }
+
+    # Demo mode fallback for immediate testing
+    demo_role = "Claim Officer" if "officer" in email.lower() else "Customer"
+    return {
+        "status": "success",
+        "user": {
+            "id": f"USR-{uuid.uuid4().hex[:6].upper()}",
+            "name": email.split("@")[0].title().replace(".", " "),
+            "email": email,
+            "role": demo_role
+        }
+    }
+
+@app.post("/api/users/register")
+def register_user(payload: dict, db: Session = Depends(get_db)):
+    name = payload.get("name")
+    email = payload.get("email")
+    password = payload.get("password")
+    role = payload.get("role", "Customer")
+
+    if not name or not email or not password:
+        raise HTTPException(status_code=400, detail="Name, email, and password are required.")
+
+    existing = db.query(UserModel).filter(UserModel.email == email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists.")
+
+    hashed_pw = f"sha256:{hashlib.sha256(password.encode()).hexdigest()}"
+    new_user = UserModel(
+        id=f"USR-{uuid.uuid4().hex[:6].upper()}",
+        name=name,
+        email=email,
+        password_hash=hashed_pw,
+        role=role
+    )
+    db.add(new_user)
+    db.commit()
+
+    return {
+        "status": "success",
+        "user": {
+            "id": new_user.id,
+            "name": new_user.name,
+            "email": new_user.email,
+            "role": new_user.role
+        }
+    }
+
 
 # --- CLAIMS ENDPOINTS ---
 
@@ -162,11 +232,19 @@ async def submit_claim(
         filename = file.filename
         blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
 
-        # Save to local storage
-        os.makedirs("./storage/uploads", exist_ok=True)
-        save_path = os.path.join("./storage/uploads", filename)
-        with open(save_path, "wb") as f:
-            f.write(file_bytes)
+        # Upload directly to Azure Blob Storage
+        connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+        if connection_string and connection_string != "your_azure_storage_connection_string":
+            try:
+                blob_service = BlobServiceClient.from_connection_string(connection_string)
+                container = "claims-documents"
+                blob_client = blob_service.get_blob_client(container=container, blob=filename)
+                blob_client.upload_blob(file_bytes, overwrite=True)
+                blob_url = blob_client.url
+            except Exception as e:
+                print(f"Azure Storage upload notice: {e}")
+                blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
+
 
     claim_data = {
         "claimant_name": claimant_name,
