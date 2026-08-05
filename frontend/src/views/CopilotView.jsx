@@ -54,23 +54,25 @@ export default function CopilotView() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
-      <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] flex items-center justify-between shrink-0">
+      <div className="stripe-card p-5 border border-white/10 bg-[#10252E]/70 flex items-center justify-between shrink-0 backdrop-blur-2xl">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#4DFFB4] to-[#3BCBFF] flex items-center justify-center text-[#081018] font-bold shadow-[0_0_20px_rgba(77,255,180,0.3)]">
             <Bot className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              Microsoft Copilot Insurance Assistant
-              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 font-mono border border-indigo-500/30">Azure OpenAI GPT-5.6-sol</span>
+            <h1 className="text-base font-extrabold text-white flex items-center gap-2 tracking-tight">
+              Enterprise AI Copilot Chat
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#4DFFB4]/10 text-[#4DFFB4] border border-[#4DFFB4]/30 font-mono">
+                GPT-5.6-sol Grounded
+              </span>
             </h1>
-            <p className="text-xs text-slate-400">Ask natural language questions about claims, policy terms, and fraud analysis</p>
+            <p className="text-xs text-slate-400">Conversational RAG assistant grounded in Azure AI Search vector policy store</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+        <div className="hidden sm:flex items-center gap-2 text-xs text-[#4DFFB4] bg-[#4DFFB4]/10 border border-[#4DFFB4]/30 px-3 py-1.5 rounded-full font-mono">
           <ShieldCheck className="w-4 h-4" />
-          <span>PII Masked & Grounded</span>
+          <span>PII Masked</span>
         </div>
       </div>
 

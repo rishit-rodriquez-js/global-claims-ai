@@ -68,12 +68,12 @@ export default function CommandPaletteModal({ isOpen, onClose, claims = [], onSe
           initial={{ opacity: 0, scale: 0.95, y: -20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -20 }}
-          transition={{ duration: 0.2 }}
-          className="w-full max-w-2xl bg-[#0F1326] border border-[#00E5FF]/30 rounded-2xl shadow-[0_0_50px_rgba(0,229,255,0.2)] overflow-hidden z-50 flex flex-col relative"
+          transition={{ type: "spring", stiffness: 350, damping: 26 }}
+          className="w-full max-w-2xl bg-[#10252E]/90 border border-[#4DFFB4]/30 rounded-3xl shadow-[0_0_60px_rgba(77,255,180,0.2)] overflow-hidden z-50 flex flex-col relative backdrop-blur-2xl"
         >
           {/* Input Header */}
-          <div className="p-4 border-b border-[#7C5CFF]/20 flex items-center gap-3 bg-[#151B34]/60">
-            <Search className="w-5 h-5 text-[#00E5FF]" />
+          <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-[#081018]/60">
+            <Search className="w-5 h-5 text-[#4DFFB4]" />
             <input
               type="text"
               autoFocus
@@ -84,7 +84,7 @@ export default function CommandPaletteModal({ isOpen, onClose, claims = [], onSe
             />
             <button
               onClick={onClose}
-              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>

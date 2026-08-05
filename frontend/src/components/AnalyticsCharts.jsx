@@ -61,23 +61,23 @@ export default function AnalyticsCharts({ claims = [] }) {
   }));
 
   const pieData = [
-    { name: 'Auto Approved', value: approved, color: '#10b981' },
-    { name: 'Human Review', value: review, color: '#f59e0b' },
-    { name: 'Rejected', value: rejected, color: '#f43f5e' },
+    { name: 'Auto Approved', value: approved, color: '#4DFFB4' },
+    { name: 'Human Review', value: review, color: '#FF8761' },
+    { name: 'Rejected', value: rejected, color: '#FF5C72' },
   ];
 
   const fraudDistributionData = [
-    { name: 'Low Risk (<15%)', count: lowRisk, color: '#10b981' },
-    { name: 'Medium Risk (15-30%)', count: medRisk, color: '#f59e0b' },
-    { name: 'High Risk (>30%)', count: highRisk, color: '#f43f5e' },
+    { name: 'Low Risk (<15%)', count: lowRisk, color: '#4DFFB4' },
+    { name: 'Medium Risk (15-30%)', count: medRisk, color: '#FFC857' },
+    { name: 'High Risk (>30%)', count: highRisk, color: '#FF5C72' },
   ];
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#0f172a] border border-slate-700 p-2.5 rounded-xl shadow-xl text-xs font-sans space-y-1">
+        <div className="bg-[#10252E] border border-[#4DFFB4]/40 p-3 rounded-2xl shadow-2xl text-xs font-sans space-y-1 backdrop-blur-xl">
           <p className="font-mono font-bold text-white">{label}</p>
-          <p className="text-blue-400 font-semibold">{payload[0].name}: {payload[0].value}</p>
+          <p className="text-[#4DFFB4] font-semibold">{payload[0].name}: {payload[0].value}</p>
         </div>
       );
     }
@@ -91,25 +91,25 @@ export default function AnalyticsCharts({ claims = [] }) {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
         <div>
           <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-tight">
-            <BarChart2 className="w-4 h-4 text-blue-400" />
+            <BarChart2 className="w-4 h-4 text-[#4DFFB4]" />
             Claim Processing Analytics & Live Telemetry
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">Real-time throughput, decision breakdown, and pipeline latency metrics</p>
         </div>
-        <span className="text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full font-mono font-medium flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Live Azure Telemetry
+        <span className="text-[11px] text-[#4DFFB4] bg-[#4DFFB4]/10 border border-[#4DFFB4]/30 px-3 py-1 rounded-full font-mono font-medium flex items-center gap-1.5 shadow-[0_0_12px_rgba(77,255,180,0.2)]">
+          <span className="w-2 h-2 rounded-full bg-[#4DFFB4] animate-pulse"></span> Live Azure Telemetry
         </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Chart 1: Recharts Area Chart for Hourly Claims Volume */}
-        <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
+        <div className="stripe-card p-5 border border-white/10 bg-[#10252E]/60 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-white flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-blue-400" />
+              <TrendingUp className="w-4 h-4 text-[#3BCBFF]" />
               Claims Processed Today (Hourly Volume)
             </h3>
             <span className="text-[11px] text-slate-400 font-mono">Total Today: {claims.length} Claims</span>
@@ -120,24 +120,24 @@ export default function AnalyticsCharts({ claims = [] }) {
               <AreaChart data={hourlyData}>
                 <defs>
                   <linearGradient id="colorClaims" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                    <stop offset="5%" stopColor="#4DFFB4" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#4DFFB4" stopOpacity={0.0}/>
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="hour" stroke="#64748b" fontSize={10} tickLine={false} />
-                <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
+                <XAxis dataKey="hour" stroke="#94A3B8" fontSize={10} tickLine={false} />
+                <YAxis stroke="#94A3B8" fontSize={10} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="claims" name="Claims Processed" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorClaims)" />
+                <Area type="monotone" dataKey="claims" name="Claims Processed" stroke="#4DFFB4" strokeWidth={2.5} fillOpacity={1} fill="url(#colorClaims)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Chart 2: Recharts Donut PieChart for Decision Breakdown */}
-        <div className="stripe-card p-5 border border-slate-800 bg-[#0f172a] space-y-4">
+        <div className="stripe-card p-5 border border-white/10 bg-[#10252E]/60 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-white flex items-center gap-2">
-              <PieIcon className="w-4 h-4 text-emerald-400" />
+              <PieIcon className="w-4 h-4 text-[#4DFFB4]" />
               AI Decision Distribution Breakdown
             </h3>
             <span className="text-[11px] text-slate-400 font-mono">{totalClaims} Total Evaluated</span>
