@@ -20,7 +20,8 @@ export default function DashboardView({
   onNavigateSubmit, 
   onNavigateOfficer,
   onNavigateCopilot,
-  searchQuery = ''
+  searchQuery = '',
+  currentUser
 }) {
   const [activeSubTab, setActiveSubTab] = useState('analytics'); // 'analytics' or 'table'
 
@@ -31,10 +32,102 @@ export default function DashboardView({
     c.policyType.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalClaims = claims.length;
-  const approvedCount = claims.filter(c => c.status === 'Approved').length;
-  const reviewCount = claims.filter(c => c.status === 'Human Review').length;
+  const isCustomer = currentUser?.role === 'Customer';
+  const customerClaims = claims.filter(c => c.userId === currentUser?.id || c.claimantName === currentUser?.name);
+
+  const totalClaims = isCustomer ? customerClaims.length : claims.length;
+  const approvedCount = (isCustomer ? customerClaims : claims).filter(c => c.status === 'Approved').length;
+  const reviewCount = (isCustomer ? customerClaims : claims).filter(c => c.status === 'Human Review').length;
   const autoApprovalRate = totalClaims > 0 ? ((approvedCount / totalClaims) * 100).toFixed(1) : 0;
+
+  // Customer Portal View
+  if (isCustomer) {
+    return (
+      <div className="space-y-6">
+        <div className="stripe-card p-6 border border-slate-800 bg-gradient-to-r from-slate-900 via-[#0f172a] to-blue-950/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-400 mb-1">
+              <Zap className="w-4 h-4 text-blue-400" />
+              <span>Customer Self-Service Claims Portal</span>
+            </div>
+            <h1 className="text-xl font-bold text-white tracking-tight">Welcome back, {currentUser?.name || 'Customer'}</h1>
+            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+              Track your active insurance claims, upload supporting bills/invoices, and view grounded AI evaluation timelines.
+            </p>
+          </div>
+          <button
+            onClick={onNavigateSubmit}
+            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all shrink-0"
+          >
+            <FileText className="w-4 h-4" />
+            <span>File New Claim</span>
+          </button>
+        </div>
+
+        {/* Customer Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="stripe-card p-4 border border-slate-800 bg-[#0f172a]">
+            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+              <span>My Total Claims</span>
+              <FileText className="w-4 h-4 text-blue-400" />
+            </div>
+            <span className="text-2xl font-bold text-white font-mono">{customerClaims.length}</span>
+          </div>
+
+          <div className="stripe-card p-4 border border-slate-800 bg-[#0f172a]">
+            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+              <span>Approved Claims</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            </div>
+            <span className="text-2xl font-bold text-emerald-400 font-mono">{approvedCount}</span>
+          </div>
+
+          <div className="stripe-card p-4 border border-slate-800 bg-[#0f172a]">
+            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+              <span>Under Review</span>
+              <Clock className="w-4 h-4 text-amber-400" />
+            </div>
+            <span className="text-2xl font-bold text-amber-400 font-mono">{reviewCount}</span>
+          </div>
+        </div>
+
+        {/* Customer Claims List */}
+        <div className="stripe-card border border-slate-800 bg-[#0f172a] overflow-hidden">
+          <div className="p-4 border-b border-slate-800">
+            <h3 className="text-sm font-semibold text-white">My Submitted Claims & AI Status</h3>
+          </div>
+
+          <div className="divide-y divide-slate-800/60">
+            {customerClaims.map((claim) => (
+              <div 
+                key={claim.id} 
+                onClick={() => onSelectClaim(claim)}
+                className="p-4 hover:bg-slate-800/40 cursor-pointer transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-blue-400">{claim.id}</span>
+                    <span className={claim.status === 'Approved' ? 'badge-approved' : 'badge-review'}>
+                      {claim.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-white">{claim.claimType} • ${claim.amount?.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-400">{claim.hospitalName || 'Facility'} • Diagnosis: {claim.diagnosis || 'Condition'}</p>
+                </div>
+
+                <div className="flex items-center gap-3 text-right">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block font-mono">Submitted: {claim.submittedDate}</span>
+                    <span className="text-xs text-blue-400 hover:underline font-medium">View AI Timeline & Details →</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -45,7 +138,7 @@ export default function DashboardView({
             <Zap className="w-4 h-4 text-blue-400" />
             <span>GenAI Autonomous Insurance Engine</span>
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Claims Processing & Intelligence Dashboard</h1>
+          <h1 className="text-xl font-bold text-white tracking-tight">Claims Officer Control Dashboard</h1>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl">
             Real-time policy validation, AI fraud scoring, and explainable decisioning powered by Azure AI Document Intelligence, Azure AI Search (RAG), and Azure OpenAI.
           </p>
@@ -56,7 +149,7 @@ export default function DashboardView({
             className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-2 transition-all"
           >
             <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>Human Review ({reviewCount})</span>
+            <span>Human Review Queue ({reviewCount})</span>
           </button>
           <button
             onClick={onNavigateSubmit}
@@ -110,14 +203,14 @@ export default function DashboardView({
 
         <div className="stripe-card p-4 border border-slate-800 bg-[#0f172a]">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-            <span>Avg Processing Time</span>
+            <span>Avg Pipeline Latency</span>
             <Zap className="w-4 h-4 text-indigo-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-white">4.8s</span>
-            <span className="text-[11px] text-indigo-400 font-medium">OCR + RAG + LLM</span>
+            <span className="text-2xl font-bold text-white">3.92s</span>
+            <span className="text-[11px] text-indigo-400 font-medium">1.4s OCR • 0.8s RAG</span>
           </div>
-          <p className="text-[10px] text-slate-500 mt-1">Azure AI Pipeline active</p>
+          <p className="text-[10px] text-slate-500 mt-1">1.6s LLM Reasoning</p>
         </div>
       </div>
 

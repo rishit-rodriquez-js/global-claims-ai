@@ -100,17 +100,32 @@ export default function CopilotView() {
               {msg.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
             </div>
 
-            <div className={`max-w-2xl rounded-xl p-4 text-xs space-y-2 ${
+            <div className={`max-w-2xl rounded-2xl p-4 text-xs space-y-2 leading-relaxed ${
               msg.sender === 'user'
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-900/90 border border-slate-800 text-slate-200'
             }`}>
-              <p className="leading-relaxed whitespace-pre-line">{msg.text}</p>
+              <div className="space-y-1 font-sans leading-relaxed whitespace-pre-wrap">
+                {msg.text.split('\n').map((line, lIdx) => {
+                  if (line.startsWith('### ')) {
+                    return <h4 key={lIdx} className="text-sm font-bold text-white pt-1 pb-0.5 border-b border-slate-800">{line.replace('### ', '')}</h4>;
+                  }
+                  if (line.startsWith('• ')) {
+                    return (
+                      <div key={lIdx} className="flex items-start gap-1.5 pl-2 text-slate-300">
+                        <span className="text-blue-400 font-bold">•</span>
+                        <span>{line.replace('• ', '')}</span>
+                      </div>
+                    );
+                  }
+                  return <p key={lIdx}>{line}</p>;
+                })}
+              </div>
               {msg.citations && msg.citations.length > 0 && (
-                <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                  <span>Citations used:</span>
+                <div className="pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                  <span>Citations:</span>
                   {msg.citations.map((c, i) => (
-                    <span key={i} className="bg-slate-800 px-1.5 py-0.5 rounded text-blue-300 border border-slate-700">
+                    <span key={i} className="bg-slate-800/90 px-2 py-0.5 rounded text-blue-300 border border-slate-700">
                       {c}
                     </span>
                   ))}

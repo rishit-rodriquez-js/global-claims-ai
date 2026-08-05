@@ -166,6 +166,7 @@ export default function App() {
             <DashboardView 
               claims={claims}
               searchQuery={searchQuery}
+              currentUser={currentUser}
               onSelectClaim={handleSelectClaim}
               onNavigateSubmit={() => setCurrentTab('submit')}
               onNavigateOfficer={() => setCurrentTab('officer')}

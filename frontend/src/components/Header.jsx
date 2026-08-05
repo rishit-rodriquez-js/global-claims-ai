@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Bell, Shield, Sparkles, User, LogOut } from 'lucide-react';
+import NotificationCenter from './NotificationCenter.jsx';
 
 export default function Header({ searchQuery, setSearchQuery, currentUser, onLogout, onNewClaimClick }) {
   const getRoleBadgeStyle = (role) => {
@@ -48,13 +49,7 @@ export default function Header({ searchQuery, setSearchQuery, currentUser, onLog
 
         {/* Notification & User Profile */}
         <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
-          <button 
-            title="Notifications"
-            className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 relative transition-colors"
-          >
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-          </button>
+          <NotificationCenter />
 
           <div className="flex items-center gap-3 pl-1">
             {/* User Avatar with Online Dot */}
