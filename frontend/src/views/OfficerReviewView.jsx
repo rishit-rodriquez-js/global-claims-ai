@@ -13,6 +13,7 @@ import {
 import { reviewClaimApi } from '../services/api.js';
 import DocumentExtractionReport from '../components/DocumentExtractionReport.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, currentUser }) {
   const pendingClaims = claims.filter(c => c.status === 'Human Review');

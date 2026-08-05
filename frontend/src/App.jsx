@@ -9,6 +9,7 @@ import OfficerReviewView from './views/OfficerReviewView.jsx';
 import CopilotView from './views/CopilotView.jsx';
 import AuditTrailView from './views/AuditTrailView.jsx';
 import AuthView from './views/AuthView.jsx';
+import CommandPaletteModal from './components/CommandPaletteModal.jsx';
 
 import { fetchClaims, fetchAuditLogs, fetchMe, logoutApi } from './services/api.js';
 import { ShieldCheck, Loader2 } from 'lucide-react';
@@ -23,6 +24,7 @@ export default function App() {
   const [selectedClaim, setSelectedClaim] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
 
   // 1. Silent Authentication & Session Persistence on Mount
   useEffect(() => {
@@ -142,7 +144,10 @@ export default function App() {
   const effectiveTab = (isCustomer && (currentTab === 'officer' || currentTab === 'audit')) ? 'dashboard' : currentTab;
 
   return (
-    <div className="flex h-screen bg-[#0b0f19] text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#060816] aurora-bg text-slate-100 overflow-hidden font-sans relative">
+      {/* Background Cyber Grid */}
+      <div className="absolute inset-0 cyber-grid opacity-20 pointer-events-none"></div>
+
       {/* Sidebar */}
       <Sidebar 
         currentTab={effectiveTab} 
@@ -152,16 +157,17 @@ export default function App() {
       />
 
       {/* Main Content Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         <Header 
           searchQuery={searchQuery} 
           setSearchQuery={setSearchQuery} 
           currentUser={currentUser}
           onLogout={handleLogout}
           onNewClaimClick={() => setCurrentTab('submit')} 
+          onOpenCmdPalette={() => setIsCmdPaletteOpen(true)}
         />
 
-        <main className="flex-1 overflow-y-auto p-6 bg-[#0b0f19]">
+        <main className="flex-1 overflow-y-auto p-6 bg-[#060816]/60">
           {effectiveTab === 'dashboard' && (
             <DashboardView 
               claims={claims}
@@ -210,6 +216,15 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Global Command Palette Modal (Ctrl+K) */}
+      <CommandPaletteModal
+        isOpen={isCmdPaletteOpen}
+        onClose={() => setIsCmdPaletteOpen(false)}
+        claims={claims}
+        onSelectClaim={handleSelectClaim}
+        onNavigate={(tab) => setCurrentTab(tab)}
+      />
     </div>
   );
 }

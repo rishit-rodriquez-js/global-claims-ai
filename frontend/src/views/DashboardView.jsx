@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import AnalyticsCharts from '../components/AnalyticsCharts.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function DashboardView({ 
   claims = [], 

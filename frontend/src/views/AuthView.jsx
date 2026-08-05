@@ -118,93 +118,97 @@ export default function AuthView({ onLoginSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex items-center justify-center p-4 md:p-8 font-sans relative overflow-hidden">
-      {/* Dynamic Background Glow Elements */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="min-h-screen bg-[#060816] aurora-bg text-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-sans select-none">
+      {/* Background Cyber Grid & Scanline */}
+      <div className="absolute inset-0 cyber-grid opacity-30 pointer-events-none"></div>
+      <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#00E5FF] to-transparent animate-scanline opacity-40 pointer-events-none"></div>
+      <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-[#00E5FF]/10 blur-3xl pointer-events-none animate-pulse-glow"></div>
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-[#7C5CFF]/10 blur-3xl pointer-events-none animate-pulse-glow"></div>
 
-      {/* Main Glassmorphic Container */}
-      <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-12 rounded-2xl border border-slate-800 bg-[#0f172a]/90 backdrop-blur-xl shadow-2xl overflow-hidden relative z-10">
+      {/* Main Container Card */}
+      <div className="w-full max-w-5xl stripe-card bg-[#0F1326]/90 border border-[#00E5FF]/30 rounded-3xl shadow-[0_0_60px_rgba(0,229,255,0.15)] overflow-hidden grid grid-cols-1 lg:grid-cols-12 backdrop-blur-2xl z-10">
         
-        {/* Left Side: Clean Enterprise Hero Showcase (5 columns) */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-blue-950/60 via-slate-900/80 to-[#0b0f19] p-8 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800/80 text-center lg:text-left">
-          <div className="space-y-4">
-            {/* Header Brand */}
-            <div className="flex items-center gap-3 justify-center lg:justify-start">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 shrink-0">
+        {/* Left Side: Animated AI Globe & Insurance Network (5 columns) */}
+        <div className="lg:col-span-5 p-8 lg:p-10 bg-gradient-to-b from-[#151B34] to-[#0F1326] border-r border-[#7C5CFF]/20 flex flex-col justify-between relative overflow-hidden">
+          <div className="space-y-6 relative z-10">
+            {/* Brand Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#00E5FF] via-[#7C5CFF] to-[#FF5FEA] flex items-center justify-center text-[#060816] shadow-[0_0_20px_rgba(0,229,255,0.4)] font-bold">
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
-                <div className="font-bold text-lg text-white tracking-tight flex items-center gap-2">
-                  GlobalClaims <span className="text-blue-400 text-xs px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 font-mono">AI</span>
+                <div className="font-extrabold text-lg text-white tracking-tight flex items-center gap-2">
+                  GlobalClaims <span className="text-[#00E5FF] text-xs px-2 py-0.5 rounded-md bg-[#00E5FF]/10 border border-[#00E5FF]/30 font-mono">AI OS</span>
                 </div>
-                <p className="text-xs text-blue-300 font-medium">Explainable AI Insurance Claims Platform</p>
+                <p className="text-xs text-[#00E5FF] font-semibold">Autonomous GenAI Claims Operating System</p>
               </div>
             </div>
 
-            {/* Hero Graphic (Shield + AI + Cloud Vector Illustration) */}
-            <div className="relative w-full py-4 flex items-center justify-center">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-cyan-500/10 rounded-3xl blur-2xl pointer-events-none"></div>
-              <svg className="w-40 h-40 drop-shadow-2xl relative z-10" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Futuristic 3D AI Globe & Insurance Circuit Graphic */}
+            <div className="relative w-full py-6 flex items-center justify-center">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#00E5FF]/20 via-[#7C5CFF]/20 to-[#FF5FEA]/20 rounded-full blur-3xl pointer-events-none"></div>
+              <svg className="w-48 h-48 drop-shadow-[0_0_25px_rgba(0,229,255,0.4)] relative z-10 animate-pulse-glow" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
-                  <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#3b82f6" />
-                    <stop offset="100%" stopColor="#4f46e5" />
+                  <linearGradient id="aiGlobeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#00E5FF" />
+                    <stop offset="50%" stopColor="#7C5CFF" />
+                    <stop offset="100%" stopColor="#FF5FEA" />
                   </linearGradient>
                 </defs>
-                {/* Outer Shield Outline */}
-                <path d="M100 20 L160 50 V110 C160 150 100 180 100 180 C100 180 40 150 40 110 V50 L100 20 Z" fill="url(#shieldGrad)" fillOpacity="0.15" stroke="url(#shieldGrad)" strokeWidth="3" />
-                {/* Inner AI Circuit Node Graphic */}
-                <path d="M100 45 L145 68 V110 C145 138 100 160 100 160 C100 160 55 138 55 110 V68 L100 45 Z" fill="#0f172a" stroke="#3b82f6" strokeWidth="2" strokeDasharray="4 2" />
-                {/* Central Cloud Core */}
-                <circle cx="100" cy="100" r="26" fill="#1e293b" stroke="#60a5fa" strokeWidth="2" />
-                {/* Cloud Icon path */}
-                <path d="M88 103 C86 103 84 101 84 98 C84 95 86 93 89 93 C90 89 94 87 98 88 C102 85 107 87 109 91 C112 91 114 93 114 96 C116 96 117 98 117 100 C117 103 115 105 112 105 L88 103 Z" fill="#3b82f6" opacity="0.9" />
-                {/* Orbiting Points */}
-                <circle cx="100" cy="50" r="5" fill="#60a5fa" />
-                <circle cx="145" cy="100" r="5" fill="#818cf8" />
-                <circle cx="100" cy="150" r="5" fill="#34d399" />
-                <circle cx="55" cy="100" r="5" fill="#f59e0b" />
-                <line x1="100" y1="55" x2="100" y2="74" stroke="#60a5fa" strokeWidth="1.5" />
-                <line x1="140" y1="100" x2="126" y2="100" stroke="#818cf8" strokeWidth="1.5" />
-                <line x1="100" y1="145" x2="100" y2="126" stroke="#34d399" strokeWidth="1.5" />
-                <line x1="60" y1="100" x2="74" y2="100" stroke="#f59e0b" strokeWidth="1.5" />
+                <circle cx="100" cy="100" r="70" stroke="url(#aiGlobeGrad)" strokeWidth="2" strokeDasharray="6 4" />
+                <ellipse cx="100" cy="100" rx="70" ry="25" stroke="#00E5FF" strokeWidth="1.5" opacity="0.6" />
+                <ellipse cx="100" cy="100" rx="25" ry="70" stroke="#7C5CFF" strokeWidth="1.5" opacity="0.6" />
+                
+                {/* Central AI Nucleus */}
+                <circle cx="100" cy="100" r="18" fill="#151B34" stroke="#00E5FF" strokeWidth="2.5" />
+                <circle cx="100" cy="100" r="8" fill="#00E5FF" />
+                
+                {/* Orbiting Policy Node Signals */}
+                <circle cx="30" cy="100" r="6" fill="#34F5C5" />
+                <circle cx="170" cy="100" r="6" fill="#FF8A5B" />
+                <circle cx="100" cy="30" r="6" fill="#00E5FF" />
+                <circle cx="100" cy="170" r="6" fill="#FF5FEA" />
+
+                <line x1="36" y1="100" x2="82" y2="100" stroke="#34F5C5" strokeWidth="1.5" strokeDasharray="2 2" />
+                <line x1="118" y1="100" x2="164" y2="100" stroke="#FF8A5B" strokeWidth="1.5" strokeDasharray="2 2" />
+                <line x1="100" y1="36" x2="100" y2="82" stroke="#00E5FF" strokeWidth="1.5" strokeDasharray="2 2" />
+                <line x1="100" y1="118" x2="100" y2="164" stroke="#FF5FEA" strokeWidth="1.5" strokeDasharray="2 2" />
               </svg>
             </div>
 
-            {/* 3 Tech Chips */}
+            {/* 3 Active AI Badges */}
             <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-300 text-xs font-medium">
-                <Check className="w-3.5 h-3.5 text-blue-400" />
-                <span>Azure OpenAI</span>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00E5FF]/10 border border-[#00E5FF]/30 text-[#00E5FF] text-xs font-semibold font-mono shadow-[0_0_10px_rgba(0,229,255,0.2)]">
+                <Check className="w-3.5 h-3.5" />
+                <span>Azure OpenAI GPT-5.6</span>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-xs font-medium">
-                <Check className="w-3.5 h-3.5 text-indigo-400" />
-                <span>AI Search (RAG)</span>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#7C5CFF]/10 border border-[#7C5CFF]/30 text-[#7C5CFF] text-xs font-semibold font-mono shadow-[0_0_10px_rgba(124,92,255,0.2)]">
+                <Check className="w-3.5 h-3.5" />
+                <span>Azure RAG Search</span>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-xs font-medium">
-                <Check className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Document Intelligence</span>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#34F5C5]/10 border border-[#34F5C5]/30 text-[#34F5C5] text-xs font-semibold font-mono shadow-[0_0_10px_rgba(52,245,197,0.2)]">
+                <Check className="w-3.5 h-3.5" />
+                <span>Doc Intelligence</span>
               </div>
             </div>
           </div>
 
-          {/* Quick Demo Section (2 Roles: Officer & Customer) */}
-          <div className="mt-6 pt-4 border-t border-slate-800/80">
-            <p className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 mb-2 text-left">Quick Demo Login:</p>
+          {/* Quick Demo Login Cards */}
+          <div className="mt-6 pt-4 border-t border-[#7C5CFF]/20 relative z-10">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-[#00E5FF] mb-2 text-left">Quick Demo Access Roles:</p>
             <div className="grid grid-cols-2 gap-2 text-left">
               {/* Claims Officer Card */}
               <button
                 type="button"
                 onClick={() => handleQuickDemoFill('Officer')}
-                className="p-2.5 rounded-xl bg-slate-900/80 hover:bg-purple-500/10 border border-slate-800 hover:border-purple-500/40 text-left transition-all group"
+                className="p-3 rounded-2xl bg-[#060816]/90 hover:bg-[#7C5CFF]/20 border border-[#7C5CFF]/30 hover:border-[#7C5CFF] text-left transition-all group shadow-sm"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-white group-hover:text-purple-300 transition-colors">👤 Claims Officer</span>
+                  <span className="text-xs font-bold text-white group-hover:text-[#7C5CFF] transition-colors">👤 Claims Officer</span>
                 </div>
                 <p className="text-[10px] text-slate-400 font-mono truncate">sarah.vance@globalclaims.ai</p>
-                <div className="mt-1.5 text-[10px] font-semibold text-purple-400 flex items-center gap-0.5">
-                  <span>Use Demo</span> <ChevronRight className="w-3 h-3" />
+                <div className="mt-1.5 text-[10px] font-bold text-[#7C5CFF] flex items-center gap-0.5">
+                  <span>Autofill</span> <ChevronRight className="w-3 h-3" />
                 </div>
               </button>
 
@@ -212,14 +216,14 @@ export default function AuthView({ onLoginSuccess }) {
               <button
                 type="button"
                 onClick={() => handleQuickDemoFill('Customer')}
-                className="p-2.5 rounded-xl bg-slate-900/80 hover:bg-blue-500/10 border border-slate-800 hover:border-blue-500/40 text-left transition-all group"
+                className="p-3 rounded-2xl bg-[#060816]/90 hover:bg-[#00E5FF]/20 border border-[#00E5FF]/30 hover:border-[#00E5FF] text-left transition-all group shadow-sm"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-white group-hover:text-blue-300 transition-colors">👤 Customer</span>
+                  <span className="text-xs font-bold text-white group-hover:text-[#00E5FF] transition-colors">👤 Customer</span>
                 </div>
                 <p className="text-[10px] text-slate-400 font-mono truncate">emily.carter@example.com</p>
-                <div className="mt-1.5 text-[10px] font-semibold text-blue-400 flex items-center gap-0.5">
-                  <span>Use Demo</span> <ChevronRight className="w-3 h-3" />
+                <div className="mt-1.5 text-[10px] font-bold text-[#00E5FF] flex items-center gap-0.5">
+                  <span>Autofill</span> <ChevronRight className="w-3 h-3" />
                 </div>
               </button>
             </div>
@@ -227,20 +231,20 @@ export default function AuthView({ onLoginSuccess }) {
         </div>
 
         {/* Right Side: Primary Login / Register Form (7 columns) */}
-        <div className="lg:col-span-7 p-8 lg:p-10 flex flex-col justify-between bg-[#0f172a]">
+        <div className="lg:col-span-7 p-8 lg:p-10 flex flex-col justify-between bg-[#0F1326]">
           <div>
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+            <div className="flex items-center justify-between border-b border-[#7C5CFF]/20 pb-4 mb-6">
               <div>
-                <h2 className="text-lg font-bold text-white tracking-tight">
+                <h2 className="text-xl font-extrabold text-white tracking-tight">
                   {isLogin ? 'Enterprise Sign In' : 'Create Account'}
                 </h2>
-                <p className="text-xs text-slate-400">
-                  {isLogin ? 'Sign in to access your claims workspace' : 'Register a Customer or Claim Officer account'}
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {isLogin ? 'Sign in to access your autonomous claims OS workspace' : 'Register a Customer or Claim Officer account'}
                 </p>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                v1.0.0
+              <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-[#00E5FF]/10 text-[#00E5FF] border border-[#00E5FF]/30">
+                v2.0 AI-OS
               </span>
             </div>
 
