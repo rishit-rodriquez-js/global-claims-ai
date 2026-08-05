@@ -232,18 +232,43 @@ async def submit_claim(
         filename = file.filename
         blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
 
-        # Upload directly to Azure Blob Storage
+        # Upload directly to Azure Blob Storage with verbose verification
         connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-        if connection_string and connection_string != "your_azure_storage_connection_string":
-            try:
-                blob_service = BlobServiceClient.from_connection_string(connection_string)
-                container = "claims-documents"
-                blob_client = blob_service.get_blob_client(container=container, blob=filename)
-                blob_client.upload_blob(file_bytes, overwrite=True)
-                blob_url = blob_client.url
-            except Exception as e:
-                print(f"Azure Storage upload notice: {e}")
-                blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
+        try:
+            print("=" * 60)
+            print("AZURE STORAGE UPLOAD STARTED")
+            print("Connection String Exists:", bool(connection_string))
+
+            blob_service = BlobServiceClient.from_connection_string(connection_string)
+            container = "claims-documents"
+
+            print("Container:", container)
+            print("Filename:", filename)
+            print("Bytes:", len(file_bytes))
+
+            blob_client = blob_service.get_blob_client(
+                container=container,
+                blob=filename
+            )
+
+            blob_client.upload_blob(
+                file_bytes,
+                overwrite=True
+            )
+
+            print("UPLOAD SUCCESS")
+            print(blob_client.url)
+
+            blob_url = blob_client.url
+
+        except Exception as e:
+            print("=" * 60)
+            print("BLOB UPLOAD FAILED")
+            print(type(e))
+            print(e)
+            print("=" * 60)
+            blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
+
 
 
     claim_data = {
