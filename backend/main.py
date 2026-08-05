@@ -1,12 +1,14 @@
 import os
 import sys
 import json
+import uuid
 import datetime
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
 # Ensure root directory and backend directory are in sys.path
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -14,8 +16,7 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
 from database.db import init_db, get_db
-
-from database.models import ClaimModel, AuditLogModel, PolicyClauseModel
+from database.models import UserModel, ClaimModel, DocumentModel, AuditLogModel, ReviewModel, PolicyClauseModel
 from utils.guardrails import validate_uploaded_file
 from utils.pii_masker import mask_pii
 
@@ -25,8 +26,6 @@ from agents.fraud_agent import run_fraud_agent
 from agents.decision_agent import run_decision_agent
 
 load_dotenv()
-
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,8 +47,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-
 @app.get("/")
 def read_root():
     return {
@@ -65,6 +62,22 @@ def read_root():
 def health_check():
     return {"status": "ok", "message": "Backend service is operational"}
 
+# --- USERS ENDPOINTS ---
+
+@app.get("/api/users")
+def get_users(db: Session = Depends(get_db)):
+    users = db.query(UserModel).all()
+    return [{"id": u.id, "name": u.name, "email": u.email, "role": u.role, "createdAt": u.created_at} for u in users]
+
+@app.post("/api/users/login")
+def login_user(payload: dict, db: Session = Depends(get_db)):
+    email = payload.get("email")
+    user = db.query(UserModel).filter(UserModel.email == email).first()
+    if not user:
+        # Default fallback demo user
+        return {"status": "success", "user": {"id": "USR-801", "name": "Senior Officer Sarah Vance", "email": email, "role": "Claim Officer"}}
+    return {"status": "success", "user": {"id": user.id, "name": user.name, "email": user.email, "role": user.role}}
+
 # --- CLAIMS ENDPOINTS ---
 
 @app.get("/api/claims")
@@ -73,21 +86,23 @@ def get_claims(db: Session = Depends(get_db)):
     result = []
     for c in claims:
         evidence = json.loads(c.evidence_json) if c.evidence_json else []
+        docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
+        doc_name = docs[0].blob_url.split("/")[-1] if docs else "uploaded_document.pdf"
         result.append({
             "id": c.id,
+            "userId": c.user_id,
             "claimantName": c.claimant_name,
             "policyNumber": c.policy_number,
             "policyType": c.policy_type,
             "claimType": c.claim_type,
             "amount": c.amount,
             "coveredAmount": c.covered_amount,
-            "incidentDate": c.incident_date,
-            "submittedDate": c.submitted_date,
+            "submittedDate": c.created_at.split()[0] if c.created_at else "2026-08-05",
             "status": c.status,
             "confidence": c.confidence,
             "fraudRisk": c.fraud_risk,
             "fraudScore": c.fraud_score,
-            "documentName": c.document_name,
+            "documentName": doc_name,
             "explanation": c.explanation,
             "retrievedClause": c.retrieved_clause,
             "evidence": evidence
@@ -101,21 +116,24 @@ def get_claim_detail(claim_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Claim not found")
     
     evidence = json.loads(c.evidence_json) if c.evidence_json else []
+    docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
+    doc_name = docs[0].blob_url.split("/")[-1] if docs else "uploaded_document.pdf"
+
     return {
         "id": c.id,
+        "userId": c.user_id,
         "claimantName": c.claimant_name,
         "policyNumber": c.policy_number,
         "policyType": c.policy_type,
         "claimType": c.claim_type,
         "amount": c.amount,
         "coveredAmount": c.covered_amount,
-        "incidentDate": c.incident_date,
-        "submittedDate": c.submitted_date,
+        "submittedDate": c.created_at.split()[0] if c.created_at else "2026-08-05",
         "status": c.status,
         "confidence": c.confidence,
         "fraudRisk": c.fraud_risk,
         "fraudScore": c.fraud_score,
-        "documentName": c.document_name,
+        "documentName": doc_name,
         "explanation": c.explanation,
         "retrievedClause": c.retrieved_clause,
         "evidence": evidence
@@ -123,6 +141,7 @@ def get_claim_detail(claim_id: str, db: Session = Depends(get_db)):
 
 @app.post("/api/claims/submit")
 async def submit_claim(
+    user_id: str = Form("USR-101"),
     claimant_name: str = Form("Eleanor Vance"),
     policy_number: str = Form("POL-HTH-7721"),
     policy_type: str = Form("Health Standard"),
@@ -135,10 +154,13 @@ async def submit_claim(
 ):
     file_bytes = b""
     filename = "medical_bill_sample.pdf"
+    blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
+
     if file:
         validate_uploaded_file(file)
         file_bytes = await file.read()
         filename = file.filename
+        blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
 
         # Save to local storage
         os.makedirs("./storage/uploads", exist_ok=True)
@@ -157,49 +179,49 @@ async def submit_claim(
     }
 
     # Execute 4-Agent Pipeline
-    # 1. Document Extraction Agent
     doc_res = run_document_agent(file_bytes, filename)
-
-    # 2. Coverage Agent (RAG Policy Search)
     cov_res = run_coverage_agent(claim_data, db)
-
-    # 3. Fraud Agent
     fraud_res = run_fraud_agent(claim_data)
-
-    # 4. Decision Agent
     dec_res = run_decision_agent(doc_res, cov_res, fraud_res, claim_data)
 
-    claim_id = f"CLM-{int(datetime.datetime.now().timestamp()) % 10000}"
+    claim_id = f"CLM-{uuid.uuid4().hex[:6].upper()}"
     status = dec_res["recommendation"]
 
+    # 1. Create Claim Record
     new_claim = ClaimModel(
         id=claim_id,
+        user_id=user_id,
         claimant_name=claimant_name,
         policy_number=policy_number,
         policy_type=policy_type,
         claim_type=claim_type,
         amount=amount,
         covered_amount=amount if status == "Approved" else 0.0,
-        incident_date=incident_date,
-        submitted_date=datetime.datetime.now().strftime("%Y-%m-%d"),
         status=status,
         confidence=dec_res["confidence"],
         fraud_risk=fraud_res["risk_category"],
         fraud_score=fraud_res["fraud_score"],
-        document_name=filename,
         explanation=dec_res["explanation"],
         retrieved_clause=dec_res["retrieved_clause"],
         evidence_json=json.dumps(dec_res["evidence"])
     )
     db.add(new_claim)
 
-    # Log into Audit Trail
+    # 2. Create Document Record
+    doc_entry = DocumentModel(
+        id=f"DOC-{uuid.uuid4().hex[:6].upper()}",
+        claim_id=claim_id,
+        blob_url=blob_url,
+        document_type=f"{claim_type} Document"
+    )
+    db.add(doc_entry)
+
+    # 3. Create Audit Log Record
     log_action = "AUTO_APPROVE" if status == "Approved" else "HUMAN_REVIEW_ESCALATION"
     audit_entry = AuditLogModel(
-        id=f"LOG-{int(datetime.datetime.now().timestamp()) % 10000}",
-        timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        agent="Decision Agent",
+        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
         claim_id=claim_id,
+        agent_name="Decision Agent",
         action=log_action,
         confidence=dec_res["confidence"],
         decision=dec_res["explanation"],
@@ -207,6 +229,8 @@ async def submit_claim(
         pii_status=f"Masked (Claimant: {mask_pii(claimant_name)})"
     )
     db.add(audit_entry)
+
+
     db.commit()
 
     return {
@@ -219,10 +243,13 @@ async def submit_claim(
         "evidence": dec_res["evidence"]
     }
 
+# --- REVIEWS ENDPOINT ---
+
 @app.post("/api/claims/{claim_id}/review")
 def review_claim(claim_id: str, payload: dict, db: Session = Depends(get_db)):
     new_status = payload.get("status", "Approved")
     notes = payload.get("notes", "")
+    officer_id = payload.get("officer_id", "USR-801")
 
     c = db.query(ClaimModel).filter(ClaimModel.id == claim_id).first()
     if not c:
@@ -232,11 +259,21 @@ def review_claim(claim_id: str, payload: dict, db: Session = Depends(get_db)):
     if new_status == "Approved":
         c.covered_amount = c.amount
 
-    audit_entry = AuditLogModel(
-        id=f"LOG-{int(datetime.datetime.now().timestamp()) % 10000}",
-        timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        agent="Human Claims Officer",
+    # Create Review record
+    review_entry = ReviewModel(
+        id=f"REV-{uuid.uuid4().hex[:6].upper()}",
         claim_id=claim_id,
+        officer_id=officer_id,
+        decision=new_status,
+        remarks=notes or f"Officer set status to {new_status}."
+    )
+    db.add(review_entry)
+
+    # Create Audit Log record
+    audit_entry = AuditLogModel(
+        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
+        claim_id=claim_id,
+        agent_name="Human Claims Officer",
         action=f"OFFICER_{new_status.upper()}",
         confidence=100.0,
         decision=notes or f"Claims Officer set status to {new_status}.",
@@ -244,9 +281,23 @@ def review_claim(claim_id: str, payload: dict, db: Session = Depends(get_db)):
         pii_status="Masked (Officer ID #8801)"
     )
     db.add(audit_entry)
+
+
     db.commit()
 
     return {"status": "success", "claim_id": claim_id, "new_status": new_status}
+
+@app.get("/api/reviews")
+def get_reviews(db: Session = Depends(get_db)):
+    reviews = db.query(ReviewModel).all()
+    return [{
+        "id": r.id,
+        "claimId": r.claim_id,
+        "officerId": r.officer_id,
+        "decision": r.decision,
+        "remarks": r.remarks,
+        "timestamp": r.timestamp
+    } for r in reviews]
 
 # --- AUDIT LOGS ENDPOINT ---
 
@@ -258,7 +309,7 @@ def get_audit_logs(db: Session = Depends(get_db)):
         result.append({
             "id": l.id,
             "timestamp": l.timestamp,
-            "agent": l.agent,
+            "agent": l.agent_name,
             "claimId": l.claim_id,
             "action": l.action,
             "confidence": l.confidence,
@@ -295,4 +346,3 @@ if __name__ == "__main__":
     import uvicorn
     print("Starting GlobalClaims AI FastAPI Server on http://localhost:8000 ...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
-

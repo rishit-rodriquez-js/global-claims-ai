@@ -1,42 +1,86 @@
-from sqlalchemy import Column, String, Float, Integer, Text, DateTime, Boolean
-from sqlalchemy.ext.declarative import declarative_base
 import datetime
+from sqlalchemy import Column, String, Float, Text, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 
 Base = declarative_base()
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="Customer")  # Customer or Claim Officer
+    created_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    claims = relationship("ClaimModel", back_populates="user")
+    reviews = relationship("ReviewModel", back_populates="officer")
 
 class ClaimModel(Base):
     __tablename__ = "claims"
 
     id = Column(String, primary_key=True, index=True)
-    claimant_name = Column(String, nullable=False)
-    policy_number = Column(String, nullable=False)
-    policy_type = Column(String, nullable=False)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True)
+    claimant_name = Column(String, nullable=False, default="Claimant")
+    policy_number = Column(String, nullable=False, default="POL-HTH-7721")
+    policy_type = Column(String, nullable=False, default="Health Standard")
     claim_type = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     covered_amount = Column(Float, default=0.0)
-    incident_date = Column(String, nullable=False)
-    submitted_date = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d"))
     status = Column(String, default="Human Review")  # Approved, Human Review, Rejected
     confidence = Column(Float, default=0.0)
     fraud_risk = Column(String, default="Low (0%)")
     fraud_score = Column(Float, default=0.0)
-    document_name = Column(String, nullable=True)
     explanation = Column(Text, nullable=True)
     retrieved_clause = Column(Text, nullable=True)
     evidence_json = Column(Text, nullable=True)
+    created_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    user = relationship("UserModel", back_populates="claims")
+    documents = relationship("DocumentModel", back_populates="claim")
+    audit_logs = relationship("AuditLogModel", back_populates="claim")
+    reviews = relationship("ReviewModel", back_populates="claim")
+
+class DocumentModel(Base):
+    __tablename__ = "documents"
+
+    id = Column(String, primary_key=True, index=True)
+    claim_id = Column(String, ForeignKey("claims.id"), nullable=False)
+    blob_url = Column(String, nullable=False)
+    document_type = Column(String, nullable=False)
+    created_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    claim = relationship("ClaimModel", back_populates="documents")
 
 class AuditLogModel(Base):
     __tablename__ = "audit_logs"
 
     id = Column(String, primary_key=True, index=True)
-    timestamp = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    agent = Column(String, nullable=False)
-    claim_id = Column(String, nullable=False)
+    claim_id = Column(String, ForeignKey("claims.id"), nullable=True)
+    agent_name = Column(String, nullable=False)
     action = Column(String, nullable=False)
     confidence = Column(Float, default=0.0)
     decision = Column(Text, nullable=False)
     evidence = Column(Text, nullable=True)
     pii_status = Column(String, default="Masked")
+    timestamp = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    claim = relationship("ClaimModel", back_populates="audit_logs")
+
+class ReviewModel(Base):
+    __tablename__ = "reviews"
+
+    id = Column(String, primary_key=True, index=True)
+    claim_id = Column(String, ForeignKey("claims.id"), nullable=False)
+    officer_id = Column(String, ForeignKey("users.id"), nullable=True)
+    decision = Column(String, nullable=False)  # Approved, Rejected, Request Info
+    remarks = Column(Text, nullable=True)
+    timestamp = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    claim = relationship("ClaimModel", back_populates="reviews")
+    officer = relationship("UserModel", back_populates="reviews")
 
 class PolicyClauseModel(Base):
     __tablename__ = "policy_clauses"
