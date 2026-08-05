@@ -4,21 +4,24 @@ from sqlalchemy.orm import Session
 def run_coverage_agent(claim_data: dict, db: Session) -> dict:
     """
     Agent 2: Coverage Agent.
-    Retrieves policy clauses via RAG and evaluates claim eligibility against policy rules.
+    Retrieves policy clauses via RAG (Azure AI Search or Grounded Policy DB) and evaluates claim eligibility against policy rules.
     """
     policy_type = claim_data.get("policy_type", "Health Standard")
     claim_type = claim_data.get("claim_type", "Emergency Medical")
+    diagnosis = claim_data.get("diagnosis", "Emergency Care")
     amount = float(claim_data.get("amount", 0.0))
 
-    rag_result = search_policy_clauses(f"{policy_type} {claim_type} coverage", policy_type, db)
+    query_str = f"{policy_type} {claim_type} {diagnosis} coverage"
+    rag_result = search_policy_clauses(query_str, policy_type, db)
 
-    # Basic eligibility reasoning based on limit checks
     is_covered = True
-    reason = f"Claim for ${amount} evaluated against {rag_result['title']}."
-
-    if "Auto" in policy_type and amount > 5000:
+    coverage_limit = 2500.0 if "Health" in policy_type else 15000.0
+    
+    if amount > coverage_limit:
         is_covered = False
-        reason = f"Claim amount (${amount}) triggers aftermarket / high-value repair review under {rag_result['title']}."
+        reason = f"Claim amount (${amount:,.2f}) exceeds policy category limit (${coverage_limit:,.2f}) under {rag_result['title']}."
+    else:
+        reason = f"Claim for ${amount:,.2f} evaluated against {rag_result['title']} for {diagnosis}. Fully within policy threshold."
 
     return {
         "agent": "Coverage Agent",

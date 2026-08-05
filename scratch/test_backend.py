@@ -41,7 +41,7 @@ def test_api():
             "/api/claims/submit",
             data={
                 "user_id": "USR-101",
-                "claimant_name": "Alexander Wright",
+                "claimant_name": "Emily Carter",
                 "policy_number": "POL-HTH-7721",
                 "policy_type": "Health Standard",
                 "claim_type": "Emergency Medical",
@@ -52,7 +52,24 @@ def test_api():
         )
         assert r3.status_code == 200, f"Failed submit: {r3.text}"
         submit_res = r3.json()
-        print("Submission verdict:", submit_res["verdict"], "| Confidence:", submit_res["confidence"])
+        new_claim_id = submit_res["claim_id"]
+        print("Submission verdict:", submit_res["verdict"], "| Confidence:", submit_res["confidence"], "| Claim ID:", new_claim_id)
+
+        print("Testing DESC dashboard ordering...")
+        r_claims_after = client.get("/api/claims")
+        all_claims = r_claims_after.json()
+        assert all_claims[0]["id"] == new_claim_id, f"Newest claim {new_claim_id} should be first, got {all_claims[0]['id']}"
+        print("DESC Dashboard ordering verified: Newest claim is first!")
+
+        print("Testing OCR parse-document endpoint...")
+        r_ocr = client.post(
+            "/api/claims/parse-document",
+            files={"file": ("invoice_sample.pdf", b"Patient: Emily Carter Amount: $1,850.00", "application/pdf")}
+        )
+        assert r_ocr.status_code == 200, f"Failed parse document: {r_ocr.text}"
+        ocr_res = r_ocr.json()
+        assert ocr_res["status"] == "success"
+        print("OCR auto-population parsed claimant:", ocr_res["extracted_data"].get("claimant_name"))
 
         print("Testing Officer Review (reviews table)...")
         claim_id = claims[0]["id"]
@@ -65,7 +82,7 @@ def test_api():
         print(f"Retrieved {len(r4.json())} audit log records.")
 
         print("\n==================================================")
-        print("ALL NEW SCHEMA TABLE TESTS PASSED CLEANLY!")
+        print("ALL NEW SCHEMA TABLE & PRIORITY 1 TESTS PASSED CLEANLY!")
         print("==================================================")
 
 if __name__ == "__main__":

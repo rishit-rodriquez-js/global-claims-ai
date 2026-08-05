@@ -1,7 +1,7 @@
 export const INITIAL_CLAIMS = [
   {
     id: "CLM-8921",
-    claimantName: "Alexander Wright",
+    claimantName: "Emily Carter",
     policyNumber: "POL-HTH-7721",
     policyType: "Health Standard",
     claimType: "Medical Invoice",
@@ -13,7 +13,7 @@ export const INITIAL_CLAIMS = [
     confidence: 96.4,
     fraudRisk: "Low (4.2%)",
     fraudScore: 4.2,
-    documentName: "st_jude_hospital_bill.pdf",
+    documentName: "hospital_invoice_01.pdf",
     explanation: "Medical invoice matches outpatient emergency policy limits under Section H-104. No exclusions apply. Total claim amount ($1,450.00) is within the $2,500 per-incident emergency coverage ceiling.",
     retrievedClause: "Section H-104: Outpatient Emergency Medical Expenses are covered up to $2,500.00 per event subject to a $100 copay.",
     evidence: [
@@ -22,7 +22,7 @@ export const INITIAL_CLAIMS = [
       "Diagnosis code ICD-10-S93.4 (Ankle Sprain) covered under emergency standard schedule."
     ],
     timeline: [
-      { step: "Upload", status: "completed", timestamp: "10:14:02 AM", detail: "File st_jude_hospital_bill.pdf uploaded (1.8 MB)" },
+      { step: "Upload", status: "completed", timestamp: "10:14:02 AM", detail: "File hospital_invoice_01.pdf uploaded (1.8 MB)" },
       { step: "OCR Extraction", status: "completed", timestamp: "10:14:05 AM", detail: "Extracted $1,450.00 billing, Provider ID #88921" },
       { step: "Policy RAG Match", status: "completed", timestamp: "10:14:07 AM", detail: "Retrieved Section H-104 (Similarity 0.94)" },
       { step: "Fraud Analysis", status: "completed", timestamp: "10:14:08 AM", detail: "Zero duplicate invoices found across 100k database" },
@@ -31,7 +31,7 @@ export const INITIAL_CLAIMS = [
   },
   {
     id: "CLM-8922",
-    claimantName: "Sophia Martinez",
+    claimantName: "Sarah Miller",
     policyNumber: "POL-AUT-4402",
     policyType: "Auto Premium",
     claimType: "Collision Damage Repair",
@@ -43,7 +43,7 @@ export const INITIAL_CLAIMS = [
     confidence: 78.2,
     fraudRisk: "Medium (24.8%)",
     fraudScore: 24.8,
-    documentName: "auto_body_estimate_repair.pdf",
+    documentName: "repair_quote_02.pdf",
     explanation: "Repair estimate includes unverified aftermarket performance modifications (Exhaust & Spoiler upgrades, $3,200) not registered under primary vehicle schedule. Escalated to Claims Officer for manual adjustment.",
     retrievedClause: "Section A-302: Vehicle repairs are covered up to actual cash value for OEM replacement parts. Custom aftermarket non-factory accessories require endorsement endorsement A-MOD.",
     evidence: [
@@ -52,7 +52,7 @@ export const INITIAL_CLAIMS = [
       "Policy record lacks endorsement A-MOD rider."
     ],
     timeline: [
-      { step: "Upload", status: "completed", timestamp: "11:02:11 AM", detail: "File auto_body_estimate_repair.pdf uploaded" },
+      { step: "Upload", status: "completed", timestamp: "11:02:11 AM", detail: "File repair_quote_02.pdf uploaded" },
       { step: "OCR Extraction", status: "completed", timestamp: "11:02:14 AM", detail: "Extracted 12 repair items totaling $8,200.00" },
       { step: "Policy RAG Match", status: "completed", timestamp: "11:02:16 AM", detail: "Retrieved Section A-302 (Custom Accessories)" },
       { step: "Fraud Analysis", status: "completed", timestamp: "completed", detail: "Aftermarket parts flag triggered" },
@@ -61,7 +61,7 @@ export const INITIAL_CLAIMS = [
   },
   {
     id: "CLM-8923",
-    claimantName: "Marcus Vance",
+    claimantName: "David Chen",
     policyNumber: "POL-PRP-9011",
     policyType: "Property Gold",
     claimType: "Water Damage Infiltration",
@@ -101,7 +101,7 @@ export const INITIAL_AUDIT_LOGS = [
     confidence: 96.4,
     decision: "Claim Approved automatically based on verified Section H-104 clause match.",
     evidence: "Emergency treatment itemized receipt verified, $1,450 <= $2,500 policy ceiling.",
-    piiStatus: "Masked (Claimant: A. W****, SSN: XXX-XX-4912)"
+    piiStatus: "Masked (Claimant: E. C****, SSN: XXX-XX-4912)"
   },
   {
     id: "LOG-1002",
@@ -132,7 +132,7 @@ export const INITIAL_AUDIT_LOGS = [
     claimId: "CLM-8922",
     action: "OCR_EXTRACTION_SUCCESS",
     confidence: 98.5,
-    decision: "Extracted 12 structured fields from auto_body_estimate_repair.pdf.",
+    decision: "Extracted 12 structured fields from repair_quote_02.pdf.",
     evidence: "Azure AI Document Intelligence read table matrix with 100% field completeness.",
     piiStatus: "Masked (Provider: Apex *** Motors)"
   }

@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, String, Float, Text, ForeignKey
+from sqlalchemy import Column, String, Float, Text, ForeignKey, Integer, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -12,11 +12,17 @@ class UserModel(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="Customer")  # Customer or Claim Officer
+    role = Column(String, nullable=False, default="Customer")  # Customer, Claim Officer, or Admin
+    last_login = Column(String, nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    account_locked = Column(Boolean, default=False)
+    profile_image_url = Column(String, nullable=True)
     created_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    updated_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     claims = relationship("ClaimModel", back_populates="user")
     reviews = relationship("ReviewModel", back_populates="officer")
+
 
 class ClaimModel(Base):
     __tablename__ = "claims"
@@ -24,6 +30,9 @@ class ClaimModel(Base):
     id = Column(String, primary_key=True, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=True)
     claimant_name = Column(String, nullable=False, default="Claimant")
+    hospital_name = Column(String, nullable=False, default="Metro Health Medical Center")
+    diagnosis = Column(String, nullable=False, default="Acute Care Consultation")
+    invoice_number = Column(String, nullable=False, default="INV-9001")
     policy_number = Column(String, nullable=False, default="POL-HTH-7721")
     policy_type = Column(String, nullable=False, default="Health Standard")
     claim_type = Column(String, nullable=False)
@@ -36,6 +45,7 @@ class ClaimModel(Base):
     explanation = Column(Text, nullable=True)
     retrieved_clause = Column(Text, nullable=True)
     evidence_json = Column(Text, nullable=True)
+    ocr_text = Column(Text, nullable=True)
     created_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     user = relationship("UserModel", back_populates="claims")
