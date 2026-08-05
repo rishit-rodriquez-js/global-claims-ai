@@ -290,3 +290,9 @@ def copilot_chat(payload: dict, db: Session = Depends(get_db)):
         "reply": reply,
         "citations": citations
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting GlobalClaims AI FastAPI Server on http://localhost:8000 ...")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
