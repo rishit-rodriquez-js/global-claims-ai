@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from azure.storage.blob import BlobServiceClient
@@ -586,18 +586,36 @@ def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = De
     docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
     
-    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else f"claim_doc_{c.id.lower()}.pdf")
-    orig_name = c.original_filename or (doc.original_filename if doc else "document.pdf")
+    orig_name = c.original_filename or (doc.original_filename if doc else f"{c.id.lower()}_document.pdf")
     container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
 
-    # Verify Blob Existence if Azure Storage credentials exist
-    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    # Build candidate blob names prioritizing specific claim-linked blob names over default generic "document.pdf"
+    candidate_names = []
+    if c.stored_blob_name and c.stored_blob_name.lower() != "document.pdf":
+        candidate_names.append(c.stored_blob_name)
+    if doc and doc.stored_blob_name and doc.stored_blob_name.lower() != "document.pdf":
+        candidate_names.append(doc.stored_blob_name)
+    candidate_names.append(f"claim_doc_{c.id.lower()}.pdf")
+    candidate_names.append(f"{c.id.lower()}.pdf")
+    candidate_names.append("document.pdf")
+
+    # Deduplicate candidate names preserving order
+    seen = set()
+    unique_candidates = [x for x in candidate_names if not (x in seen or seen.add(x))]
+
+    stored_name = unique_candidates[0]
     blob_exists = False
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+
     if connection_string and "your_azure_storage" not in connection_string.lower():
         try:
             blob_service = BlobServiceClient.from_connection_string(connection_string)
-            blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
-            blob_exists = blob_client.exists()
+            for cand in unique_candidates:
+                blob_client = blob_service.get_blob_client(container=container, blob=cand)
+                if blob_client.exists():
+                    stored_name = cand
+                    blob_exists = True
+                    break
         except Exception as err:
             logger.warning(f"Blob existence check warning: {err}")
 
@@ -640,23 +658,37 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
 
     docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
-    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else f"claim_doc_{c.id.lower()}.pdf")
-    orig_name = c.original_filename or (doc.original_filename if doc else "document.pdf")
+    orig_name = c.original_filename or (doc.original_filename if doc else f"{c.id.lower()}_document.pdf")
+
+    candidate_names = []
+    if c.stored_blob_name and c.stored_blob_name.lower() != "document.pdf":
+        candidate_names.append(c.stored_blob_name)
+    if doc and doc.stored_blob_name and doc.stored_blob_name.lower() != "document.pdf":
+        candidate_names.append(doc.stored_blob_name)
+    candidate_names.append(f"claim_doc_{c.id.lower()}.pdf")
+    candidate_names.append(f"{c.id.lower()}.pdf")
+    candidate_names.append("document.pdf")
+
+    seen = set()
+    unique_candidates = [x for x in candidate_names if not (x in seen or seen.add(x))]
+    stored_name = unique_candidates[0]
 
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if connection_string and "your_azure_storage" not in connection_string.lower():
         try:
             container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
             blob_service = BlobServiceClient.from_connection_string(connection_string)
-            blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
-            if blob_client.exists():
-                stream = blob_client.download_blob()
-                pdf_bytes = stream.readall()
-                return Response(
-                    content=pdf_bytes,
-                    media_type="application/pdf",
-                    headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
-                )
+            for cand in unique_candidates:
+                blob_client = blob_service.get_blob_client(container=container, blob=cand)
+                if blob_client.exists():
+                    stored_name = cand
+                    stream = blob_client.download_blob()
+                    pdf_bytes = stream.readall()
+                    return Response(
+                        content=pdf_bytes,
+                        media_type="application/pdf",
+                        headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
+                    )
         except Exception as e:
             logger.warning(f"Blob stream direct read fallback for {stored_name}: {e}")
 

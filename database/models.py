@@ -69,9 +69,9 @@ class DocumentModel(Base):
 
     id = Column(String, primary_key=True, index=True)
     claim_id = Column(String, ForeignKey("claims.id"), nullable=False)
-    original_filename = Column(String, nullable=False, default="document.pdf")
-    stored_blob_name = Column(String, nullable=False, default="document.pdf")
-    blob_url = Column(String, nullable=False)
+    original_filename = Column(String, nullable=True)
+    stored_blob_name = Column(String, nullable=True)
+    blob_url = Column(String, nullable=True)
     document_type = Column(String, nullable=False, default="Claim Document")
     content_type = Column(String, default="application/pdf")
     file_size = Column(Integer, default=0)
