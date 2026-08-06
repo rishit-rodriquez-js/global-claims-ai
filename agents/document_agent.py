@@ -22,16 +22,26 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
 
     if endpoint and key and key != "your_doc_intel_key":
         try:
-            from azure.ai.formrecognizer import DocumentAnalysisClient
             from azure.core.credentials import AzureKeyCredential
-
-            client = DocumentAnalysisClient(endpoint=endpoint, credential=AzureKeyCredential(key))
-            poller = client.begin_analyze_document("prebuilt-invoice", file_bytes)
-            result = poller.result()
-
-            for doc in result.documents:
-                for field_name, field in doc.fields.items():
-                    extracted_fields[field_name] = field.content
+            try:
+                from azure.ai.documentintelligence import DocumentIntelligenceClient
+                from azure.ai.documentintelligence.models import AnalyzeDocumentRequest
+                client = DocumentIntelligenceClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+                poller = client.begin_analyze_document("prebuilt-invoice", AnalyzeDocumentRequest(bytes_source=file_bytes))
+                result = poller.result()
+                if hasattr(result, 'documents') and result.documents:
+                    for doc in result.documents:
+                        if hasattr(doc, 'fields') and doc.fields:
+                            for field_name, field in doc.fields.items():
+                                extracted_fields[field_name] = getattr(field, 'value_string', None) or getattr(field, 'content', str(field))
+            except Exception:
+                from azure.ai.formrecognizer import DocumentAnalysisClient
+                client = DocumentAnalysisClient(endpoint=endpoint, credential=AzureKeyCredential(key))
+                poller = client.begin_analyze_document("prebuilt-invoice", file_bytes)
+                result = poller.result()
+                for doc in result.documents:
+                    for field_name, field in doc.fields.items():
+                        extracted_fields[field_name] = field.content
         except Exception as doc_err:
             logger.warning(f"Azure AI Document Intelligence notice: {doc_err}. Proceeding with byte parsing.")
 
