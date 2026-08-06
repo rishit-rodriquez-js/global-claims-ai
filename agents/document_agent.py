@@ -9,62 +9,72 @@ logger = logging.getLogger("globalclaims")
 
 def parse_label_value_pairs(raw_text: str) -> dict:
     """
-    Label-based positional pair parser.
-    Splits document text by finding label headers and extracting text up to the next label.
+    Generic line-by-line Label -> Value pair parser.
+    Scans document line-by-line to extract 'Label: Value' or 'Label \n Value' mappings.
+    Prevents text bleeding across lines and section boundaries.
     """
     if not raw_text:
         return {}
 
-    known_labels = [
-        "Claimant Full Name", "Claimant Name", "Claimant", "Patient Name", "Patient", "Customer", "Recipient",
-        "Policy Number", "Policy #", "Policy Category", "Policy Type", "Policy", "Category",
-        "Claim Type", "Type",
-        "Claim Amount", "Total Amount", "Amount", "Total", "Balance", "Due",
-        "Incident Date", "Date of Incident", "Date",
-        "Invoice Number", "Invoice #", "Invoice", "Inv", "Receipt",
-        "Repair Facility", "Facility", "Hospital", "Provider", "Clinic", "Center", "Vendor",
-        "Vehicle Make/Model", "Vehicle Model", "Vehicle", "Car", "Make", "Manufacturer", "Registration", "VIN",
-        "Incident Description", "Damage Description", "Repair Details", "Work Performed", "Itemized Repairs", "Repair Estimate", "Diagnosis / Treatment", "Diagnosis", "Treatment"
-    ]
+    LABEL_MAPPING = {
+        "claimant_name": ["Claimant Full Name", "Claimant Name", "Claimant", "Patient Name", "Patient", "Customer Name", "Customer", "Recipient"],
+        "policy_number": ["Policy Number", "Policy #", "Policy ID", "Policy"],
+        "policy_type": ["Policy Category", "Policy Type", "Category"],
+        "claim_type": ["Claim Type", "Type"],
+        "amount": ["Claim Amount", "Total Amount", "Amount", "Total", "Balance", "Due", "Invoice Total"],
+        "incident_date": ["Incident Date", "Date of Incident", "Date"],
+        "invoice_number": ["Invoice Number", "Invoice #", "Invoice ID", "Invoice", "Inv", "Receipt"],
+        "hospital_name": ["Repair Facility", "Facility", "Hospital", "Provider", "Clinic", "Center", "Vendor"],
+        "vehicle": ["Vehicle Make/Model", "Vehicle Model", "Vehicle", "Car", "Make", "Manufacturer", "Registration", "VIN"],
+        "diagnosis": ["Incident Description", "Damage Description", "Repair Details", "Work Performed", "Itemized Repairs", "Repair Estimate", "Diagnosis / Treatment", "Diagnosis", "Treatment", "Description"]
+    }
 
-    label_occurrences = []
-    for label in known_labels:
-        pattern = re.compile(r'(?:^|\n|\s)(' + re.escape(label) + r')\s*[:\-]?\s*', re.IGNORECASE)
-        for match in pattern.finditer(raw_text):
-            label_occurrences.append({
-                "label": label,
-                "start": match.start(1),
-                "end": match.end()
-            })
+    all_label_tuples = []
+    for internal_field, aliases in LABEL_MAPPING.items():
+        for alias in aliases:
+            all_label_tuples.append((alias.lower(), internal_field, alias))
 
-    if not label_occurrences:
-        return {}
+    all_label_tuples.sort(key=lambda x: len(x[0]), reverse=True)
 
-    label_occurrences.sort(key=lambda x: x["start"])
+    extracted_dict = {}
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
 
-    parsed_pairs = {}
-    for i in range(len(label_occurrences)):
-        curr = label_occurrences[i]
-        lbl_key = curr["label"].strip()
-        val_start = curr["end"]
-        val_end = label_occurrences[i + 1]["start"] if (i + 1 < len(label_occurrences)) else len(raw_text)
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        matched_field = None
+        matched_alias = None
+        matched_val = None
 
-        val_text = raw_text[val_start:val_end].strip()
-        lines = [line.strip() for line in val_text.splitlines() if line.strip()]
-        cleaned_val = "\n".join(lines) if len(lines) > 1 else (lines[0] if lines else "")
+        for alias_lower, internal_field, alias in all_label_tuples:
+            if line.lower().startswith(alias_lower):
+                matched_field = internal_field
+                matched_alias = alias
+                remainder = line[len(alias):].lstrip(":-# ").strip()
+                if remainder:
+                    matched_val = remainder
+                elif i + 1 < len(lines):
+                    next_line = lines[i + 1]
+                    is_next_label = any(next_line.lower().startswith(alt[0]) for alt in all_label_tuples)
+                    if not is_next_label:
+                        matched_val = next_line
+                        i += 1
+                break
 
-        if cleaned_val and lbl_key not in parsed_pairs:
-            parsed_pairs[lbl_key] = cleaned_val
+        if matched_field and matched_val and matched_field not in extracted_dict:
+            extracted_dict[matched_field] = matched_val
 
-    return parsed_pairs
+        i += 1
+
+    return extracted_dict
 
 
 def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     """
     Agent 1: Document Extraction Agent.
-    Uses Azure AI Document Intelligence SDK if credentials exist.
-    Otherwise parses text/bytes content from uploaded document to dynamically extract/derive structured claim fields.
-    Guarantees every upload generates dynamic, document-unique fields.
+    Uses Azure AI Document Intelligence SDK as primary source.
+    Falls back to generic line-by-line Label -> Value parser and regex only when labels are missing.
+    Populates parsed_data directly from mapped values.
     """
     endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
     key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
@@ -118,29 +128,15 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             logger.warning(f"Raw file text decoding notice: {decode_err}")
             raw_text = ""
 
-    # 1. Label-based pair extraction
+    # Line-by-Line Generic Label -> Value Parser
     parsed_pairs = parse_label_value_pairs(raw_text)
 
-    # 2. Corrected Regex Fallback Patterns
+    # Corrected Regex Fallback Patterns (Only used if label parser misses)
     claimant_match = re.search(r'(?:Claimant Full Name|Claimant Name|Claimant|Patient Name|Patient|Customer|Recipient)[:\s]+([A-Za-z0-9\s._-]+?)(?=\s+(?:Policy|Claim|Amount|Date|Invoice|Facility)|$|\n)', raw_text, re.IGNORECASE)
     policy_match = re.search(r'(?:Policy Number|Policy #|Policy|Pol)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
-    policy_type_match = re.search(r'(?:Policy Category|Policy Type|Category)[:\s]+([A-Za-z0-9\s-]+)', raw_text, re.IGNORECASE)
-    claim_type_match = re.search(r'(?:Claim Type|Type)[:\s]+([A-Za-z0-9\s-]+)', raw_text, re.IGNORECASE)
-    facility_match = re.search(r'(?:Repair Facility|Facility|Hospital|Provider|Clinic|Center|Vendor)[:\s]+([A-Za-z0-9\s.,-]+?)(?=\s+(?:Vehicle|Policy|Claim|Amount|Date|Invoice)|$|\n)', raw_text, re.IGNORECASE)
-    vehicle_match = re.search(r'(?:Vehicle Make/Model|Vehicle Model|Vehicle|Car|Make|Manufacturer|VIN)[:\s]+([A-Za-z0-9\s.,-]+?)(?=\s+(?:Policy|Claim|Amount|Date|Invoice|Diagnosis)|$|\n)', raw_text, re.IGNORECASE)
-    invoice_match = re.search(r'(?:Invoice Number|Invoice #|Invoice|Inv|Receipt)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
-    amount_match = re.search(r'(?:Claim Amount|Total Amount|Amount|Total|Balance|Due)[:\s$]+([\d,]+\.?\d*)', raw_text, re.IGNORECASE)
-    
-    # Corrected Incident Date Regex
     date_match = re.search(r"(?:Incident Date|Date of Incident|Date)\s*[:\-]?\s*(\d{2}[-/]\d{2}[-/]\d{4}|\d{4}[-/]\d{2}[-/]\d{2})", raw_text, re.IGNORECASE)
+    amount_match = re.search(r'(?:Claim Amount|Total Amount|Amount|Total|Balance|Due)[:\s$]+([\d,]+\.?\d*)', raw_text, re.IGNORECASE)
 
-    multiline_diag_match = re.search(
-        r'(?:Diagnosis / Treatment|Diagnosis|Treatment|Incident Description|Description|Damage Details|Itemized Services|Repair Details|Work Performed)[:\s]+([\s\S]+?)(?=\n\s*(?:Claim Amount|Total Amount|Amount|Invoice Number|Invoice #|Policy Number|Date|Signature)|$)',
-        raw_text,
-        re.IGNORECASE
-    )
-
-    # Filename or content semantic detection
     is_auto = any(term in file_name.lower() or term in raw_text.lower() for term in ["auto", "collision", "vehicle", "repair", "car"])
     is_rishit = "rishit" in file_name.lower() or "rishit" in raw_text.lower()
 
@@ -153,37 +149,25 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             extracted_fields.get("PatientName") or
             extracted_fields.get("Patient") or
             extracted_fields.get("ClaimantName") or
-            parsed_pairs.get("Claimant Full Name") or
-            parsed_pairs.get("Claimant Name") or
-            parsed_pairs.get("Claimant") or
-            parsed_pairs.get("Patient Name") or
-            parsed_pairs.get("Patient") or
-            parsed_pairs.get("Customer") or
+            parsed_pairs.get("claimant_name") or
             (claimant_match.group(1).strip() if claimant_match else None) or
             "Unextracted (Officer Review Required)"
         )
 
     policy_number = (
         extracted_fields.get("PolicyNumber") or
-        parsed_pairs.get("Policy Number") or
-        parsed_pairs.get("Policy #") or
-        parsed_pairs.get("Policy") or
+        parsed_pairs.get("policy_number") or
         (policy_match.group(1).strip() if policy_match else None) or
         "Unextracted (Officer Review Required)"
     )
 
     policy_type = (
-        parsed_pairs.get("Policy Category") or
-        parsed_pairs.get("Policy Type") or
-        parsed_pairs.get("Category") or
-        (policy_type_match.group(1).strip() if policy_type_match else None) or
+        parsed_pairs.get("policy_type") or
         ("Auto Premium" if is_auto else "Health Standard")
     )
 
     claim_type = (
-        parsed_pairs.get("Claim Type") or
-        parsed_pairs.get("Type") or
-        (claim_type_match.group(1).strip() if claim_type_match else None) or
+        parsed_pairs.get("claim_type") or
         ("Collision Damage Repair" if is_auto else "Emergency Medical")
     )
 
@@ -191,72 +175,34 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
         extracted_fields.get("VendorName") or
         extracted_fields.get("HospitalName") or
         extracted_fields.get("ProviderName") or
-        parsed_pairs.get("Repair Facility") or
-        parsed_pairs.get("Facility") or
-        parsed_pairs.get("Hospital") or
-        parsed_pairs.get("Provider") or
-        parsed_pairs.get("Vendor") or
-        (facility_match.group(1).strip() if facility_match else None) or
+        parsed_pairs.get("hospital_name") or
         "Unextracted Facility"
     )
 
     vehicle_info = (
-        parsed_pairs.get("Vehicle Make/Model") or
-        parsed_pairs.get("Vehicle Model") or
-        parsed_pairs.get("Vehicle") or
-        parsed_pairs.get("Car") or
-        parsed_pairs.get("Make") or
-        parsed_pairs.get("Manufacturer") or
-        parsed_pairs.get("VIN") or
-        (vehicle_match.group(1).strip() if vehicle_match else "")
+        parsed_pairs.get("vehicle") or ""
     )
 
-    raw_description = (
-        parsed_pairs.get("Incident Description") or
-        parsed_pairs.get("Damage Description") or
-        parsed_pairs.get("Repair Details") or
-        parsed_pairs.get("Work Performed") or
-        parsed_pairs.get("Itemized Repairs") or
-        parsed_pairs.get("Repair Estimate") or
-        parsed_pairs.get("Diagnosis / Treatment") or
-        parsed_pairs.get("Diagnosis") or
-        parsed_pairs.get("Treatment")
+    diagnosis = (
+        parsed_pairs.get("diagnosis") or "Unextracted Condition"
     )
-
-    if raw_description:
-        diagnosis = raw_description
-    elif multiline_diag_match:
-        raw_lines = [line.strip() for line in multiline_diag_match.group(1).splitlines() if line.strip()]
-        diagnosis = "\n".join(raw_lines)
-    else:
-        diagnosis = "Unextracted Condition"
 
     incident_date_val = (
         extracted_fields.get("InvoiceDate") or
-        parsed_pairs.get("Incident Date") or
-        parsed_pairs.get("Date of Incident") or
-        parsed_pairs.get("Date") or
+        parsed_pairs.get("incident_date") or
         (date_match.group(1).strip() if date_match else datetime.datetime.now().strftime("%Y-%m-%d"))
     )
 
     invoice_number = (
         extracted_fields.get("InvoiceId") or
         extracted_fields.get("InvoiceNumber") or
-        parsed_pairs.get("Invoice Number") or
-        parsed_pairs.get("Invoice #") or
-        parsed_pairs.get("Invoice") or
-        parsed_pairs.get("Inv") or
-        (invoice_match.group(1).strip() if invoice_match else None) or
+        parsed_pairs.get("invoice_number") or
         "Unextracted (Officer Review Required)"
     )
 
     raw_amount = (
         extracted_fields.get("InvoiceTotal") or
-        parsed_pairs.get("Claim Amount") or
-        parsed_pairs.get("Total Amount") or
-        parsed_pairs.get("Amount") or
-        parsed_pairs.get("Total") or
-        parsed_pairs.get("Balance")
+        parsed_pairs.get("amount")
     )
 
     if raw_amount:
