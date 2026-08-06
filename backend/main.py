@@ -221,20 +221,32 @@ def read_root():
 @app.get("/health")
 @app.get("/api/health")
 def health_check(db: Session = Depends(get_db)):
+    t0 = datetime.datetime.now()
     db_status = "connected"
+    db_latency_ms = 0
     try:
         db.execute(text("SELECT 1"))
+        db_latency_ms = round((datetime.datetime.now() - t0).total_seconds() * 1000, 2)
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         db_status = "disconnected"
 
+    has_blob = bool(os.getenv("AZURE_STORAGE_CONNECTION_STRING") and "your_azure_storage" not in os.getenv("AZURE_STORAGE_CONNECTION_STRING").lower())
+    has_openai = bool(os.getenv("AZURE_OPENAI_KEY") and "your_azure_openai" not in os.getenv("AZURE_OPENAI_KEY").lower())
+    has_doc_intel = bool(os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY") and "your_doc_intel" not in os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY").lower())
+    has_search = bool((os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")) and "your_search" not in str(os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")).lower())
+
     return {
         "status": "healthy" if db_status == "connected" else "degraded",
-        "database": db_status,
-        "azure_blob": "connected" if os.getenv("AZURE_STORAGE_CONNECTION_STRING") else "configured_mock",
-        "azure_openai": "connected" if os.getenv("AZURE_OPENAI_KEY") else "configured_mock",
-        "document_intelligence": "connected" if os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY") else "configured_mock",
-        "ai_search": "connected" if (os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")) else "configured_mock"
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "services": {
+            "database": {"status": db_status, "latencyMs": db_latency_ms},
+            "jwt_auth": {"status": "configured", "secretSet": bool(os.getenv("JWT_SECRET") or os.getenv("SECRET_KEY"))},
+            "azure_blob": {"status": "connected" if has_blob else "mock_configured"},
+            "azure_openai": {"status": "connected" if has_openai else "mock_configured"},
+            "document_intelligence": {"status": "connected" if has_doc_intel else "mock_configured"},
+            "ai_search": {"status": "connected" if has_search else "mock_configured"}
+        }
     }
 
 # --- USERS & AUTH ENDPOINTS ---
@@ -558,32 +570,55 @@ def generate_azure_sas_url(container_name: str, blob_name: str) -> str:
         return None
 
 @app.get("/api/claims/{claim_id}/document")
-def get_claim_document_sas(claim_id: str, user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
-    c = db.query(ClaimModel).filter(ClaimModel.id == claim_id).first()
+def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
+    clean_id = claim_id.strip().upper()
+    c = db.query(ClaimModel).filter(ClaimModel.id.ilike(clean_id)).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Claim not found")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "code": "CLAIM_NOT_FOUND",
+                "message": f"Claim with ID '{clean_id}' could not be located in database."
+            }
+        )
 
-    docs = db.query(DocumentModel).filter(DocumentModel.claim_id == claim_id).all()
+    docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
     
     stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else f"claim_doc_{c.id.lower()}.pdf")
     orig_name = c.original_filename or (doc.original_filename if doc else "document.pdf")
     container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
 
-    sas_url = generate_azure_sas_url(container, stored_name)
-    stream_url = f"/api/claims/{claim_id}/document-stream"
+    # Verify Blob Existence if Azure Storage credentials exist
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    blob_exists = False
+    if connection_string and "your_azure_storage" not in connection_string.lower():
+        try:
+            blob_service = BlobServiceClient.from_connection_string(connection_string)
+            blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
+            blob_exists = blob_client.exists()
+        except Exception as err:
+            logger.warning(f"Blob existence check warning: {err}")
+
+    sas_url = generate_azure_sas_url(container, stored_name) if blob_exists else None
     
-    # Use full SAS URL if Azure is connected; otherwise fallback to authenticated backend stream URL
-    final_url = sas_url if sas_url else f"{os.getenv('VITE_API_URL', 'http://127.0.0.1:8000')}{stream_url}"
+    base_api_url = os.getenv("API_URL") or str(request.base_url).rstrip("/")
+    if not base_api_url.endswith("/api"):
+        base_api_url = f"{base_api_url}/api" if not base_api_url.endswith("/") else f"{base_api_url}api"
+
+    stream_url = f"{base_api_url}/claims/{c.id}/document-stream"
+    final_url = sas_url if sas_url else stream_url
 
     return {
         "success": True,
-        "claimId": claim_id,
+        "claimId": c.id,
         "originalFilename": orig_name,
         "storedBlobName": stored_name,
         "documentUrl": final_url,
         "sasUrl": sas_url or final_url,
         "isSasUrl": bool(sas_url),
+        "blobExists": blob_exists,
         "expiresInMinutes": 15
     }
 
@@ -591,11 +626,19 @@ from fastapi.responses import Response
 
 @app.get("/api/claims/{claim_id}/document-stream")
 def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
-    c = db.query(ClaimModel).filter(ClaimModel.id == claim_id).first()
+    clean_id = claim_id.strip().upper()
+    c = db.query(ClaimModel).filter(ClaimModel.id.ilike(clean_id)).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Claim not found")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "code": "DOCUMENT_NOT_FOUND",
+                "message": f"Uploaded document for claim '{clean_id}' could not be located."
+            }
+        )
 
-    docs = db.query(DocumentModel).filter(DocumentModel.claim_id == claim_id).all()
+    docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
     stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else f"claim_doc_{c.id.lower()}.pdf")
     orig_name = c.original_filename or (doc.original_filename if doc else "document.pdf")
@@ -606,15 +649,16 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
             container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
             blob_service = BlobServiceClient.from_connection_string(connection_string)
             blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
-            stream = blob_client.download_blob()
-            pdf_bytes = stream.readall()
-            return Response(
-                content=pdf_bytes,
-                media_type="application/pdf",
-                headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
-            )
+            if blob_client.exists():
+                stream = blob_client.download_blob()
+                pdf_bytes = stream.readall()
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
+                )
         except Exception as e:
-            logger.warning(f"Blob stream direct read fallback: {e}")
+            logger.warning(f"Blob stream direct read fallback for {stored_name}: {e}")
 
     pdf_content = f"""%PDF-1.4
 1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj
@@ -860,18 +904,20 @@ async def submit_claim(
         "confidence": dec_res["confidence"],
         "fraudRisk": fraud_res["risk_category"],
         "fraudScore": fraud_res["fraud_score"],
-        "documentName": filename,
+        "documentName": clean_original_filename,
+        "originalFilename": clean_original_filename,
+        "storedBlobName": stored_blob_name,
+        "blobUrl": blob_url,
         "explanation": dec_res["explanation"],
         "retrievedClause": dec_res["retrieved_clause"],
         "evidence": dec_res["evidence"],
         "ocrText": ocr_text,
         "timeline": [
-            {"step": "Upload", "status": "completed", "timestamp": "Just now", "detail": f"Uploaded {filename} to Azure Blob Storage"},
-            {"step": "OCR", "status": "completed", "timestamp": "Just now", "detail": f"Azure AI Document Intelligence extracted fields for {claimant_name} at {hospital_name}"},
-            {"step": "Policy Match", "status": "completed", "timestamp": "Just now", "detail": f"Azure AI Search RAG retrieved matching clause for {diagnosis}"},
-            {"step": "Fraud Check", "status": "completed", "timestamp": "Just now", "detail": f"Fraud Agent calculated risk score: {fraud_res['risk_category']}"},
-            {"step": "Reasoning", "status": "completed", "timestamp": "Just now", "detail": f"Azure OpenAI evaluated coverage for invoice #{invoice_number}"},
-            {"step": "Decision", "status": "completed", "timestamp": "Just now", "detail": f"Final Verdict: {status_verdict} ({dec_res['confidence']}% confidence)"}
+            {"step": "Upload", "status": "completed", "timestamp": "Just now", "detail": f"Uploaded {clean_original_filename} to Azure Blob Storage"},
+            {"step": "OCR", "status": "completed", "timestamp": "Just now", "detail": f"Azure AI Document Intelligence extracted fields for {actual_claimant_name} at {hospital_name}"},
+            {"step": "Policy RAG Match", "status": "completed", "timestamp": "Just now", "detail": f"Matched clause: {dec_res['retrieved_clause'][:50]}..."},
+            {"step": "Fraud Analysis", "status": "completed", "timestamp": "Just now", "detail": f"Evaluated fraud risk score: {fraud_res['risk_category']}"},
+            {"step": "AI Decision", "status": "completed", "timestamp": "Just now", "detail": f"Recommendation: {status_verdict} (Confidence: {dec_res['confidence']}%)"}
         ]
     }
 

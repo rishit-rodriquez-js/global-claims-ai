@@ -94,8 +94,8 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
       clearTimeout(p3);
       setProcessingStep(4);
 
-      const createdClaim = response.claim || {
-        id: response.claim_id,
+      const createdClaim = (response && response.id) ? response : (response.claim || {
+        id: response.claim_id || `CLM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
         claimantName: formData.claimantName,
         policyNumber: formData.policyNumber,
         policyType: formData.policyType,
@@ -109,6 +109,7 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
         fraudRisk: response.confidence >= 90 ? 'Low (4.2%)' : 'Medium (22.5%)',
         fraudScore: response.confidence >= 90 ? 4.2 : 22.5,
         documentName: selectedFile ? selectedFile.name : 'uploaded_document.pdf',
+        originalFilename: selectedFile ? selectedFile.name : 'uploaded_document.pdf',
         explanation: response.explanation || 'Processed cleanly via Azure AI Pipeline.',
         retrievedClause: response.retrieved_clause || 'Section H-104: Emergency Medical Expenses',
         evidence: response.evidence || ['Extracted via Azure AI Document Intelligence', 'Verified against policy'],
@@ -118,12 +119,16 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
           { step: 'Policy Match', status: 'completed', timestamp: 'Just now', detail: 'Azure AI Search RAG retrieved matching policy clause' },
           { step: 'Fraud Check', status: 'completed', timestamp: 'Just now', detail: 'Fraud Risk Scoring Agent performed anomaly check' },
           { step: 'Reasoning', status: 'completed', timestamp: 'Just now', detail: 'Azure OpenAI GPT-5.6-sol evaluated policy eligibility' },
-          { step: 'Decision', status: 'completed', timestamp: 'Just now', detail: `Verdict rendered: ${response.verdict}` }
+          { step: 'Decision', status: 'completed', timestamp: 'Just now', detail: `Final Recommendation: ${response.verdict || 'Human Review'}` }
         ]
-      };
+      });
 
-      setIsProcessing(false);
-      onSubmitClaimSuccess(createdClaim);
+      setTimeout(() => {
+        setIsProcessing(false);
+        if (onSubmitClaimSuccess) {
+          onSubmitClaimSuccess(createdClaim);
+        }
+      }, 800);
 
     } catch (err) {
       clearTimeout(p1);
