@@ -16,11 +16,12 @@ def generate_query_embedding(query_text: str) -> list:
     if endpoint and key and "your_azure_openai" not in key.lower():
         try:
             from openai import AzureOpenAI
+            clean_endpoint = endpoint.split("/openai")[0] if "/openai" in endpoint else endpoint
             api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-06-01")
-            client = AzureOpenAI(azure_endpoint=endpoint, api_key=key, api_version=api_version)
+            client = AzureOpenAI(azure_endpoint=clean_endpoint, api_key=key, api_version=api_version)
             response = client.embeddings.create(input=query_text, model=deployment)
             vector = response.data[0].embedding
-            print(f"[AZURE OPENAI EMBEDDINGS] Generated vector embedding ({len(vector)} dimensions) using deployment '{deployment}'")
+            print(f"[AZURE OPENAI EMBEDDINGS SUCCESS] Generated vector embedding ({len(vector)} dimensions) using deployment '{deployment}'")
             logger.info(f"--- AZURE OPENAI EMBEDDINGS --- Generated vector ({len(vector)} dims) for deployment '{deployment}'")
             return vector
         except Exception as embed_err:
