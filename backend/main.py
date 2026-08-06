@@ -24,6 +24,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger("globalclaims")
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
 
 # Ensure root directory and backend directory are in sys.path
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -633,6 +634,10 @@ def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = De
         except Exception as err:
             logger.warning(f"Blob existence check warning for '{stored_name}': {err}")
 
+    # Local storage fallback check
+    local_upload_dir = os.path.join(root_dir, "storage", "uploads")
+    has_local_file = os.path.exists(os.path.join(local_upload_dir, stored_name))
+
     sas_url = generate_azure_sas_url(container, stored_name) if blob_exists else None
     
     base_api_url = os.getenv("API_URL") or str(request.base_url).rstrip("/")
@@ -640,7 +645,7 @@ def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = De
         base_api_url = f"{base_api_url}/api" if not base_api_url.endswith("/") else f"{base_api_url}api"
 
     stream_url = f"{base_api_url}/claims/{c.id}/document-stream"
-    final_url = sas_url if sas_url else stream_url
+    final_url = sas_url if (sas_url and blob_exists) else stream_url
 
     return {
         "success": True,
