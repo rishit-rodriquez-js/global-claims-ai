@@ -24,52 +24,58 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
   const [ocrStatusMessage, setOcrStatusMessage] = useState(null);
 
   const handleFileChange = async (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setErrorMessage(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      // Validate PDF only
-      if (!file.name.toLowerCase().endswith('.pdf')) {
-        setErrorMessage("Only PDF documents (.pdf) are accepted for AI claims processing.");
-        return;
+    setErrorMessage(null);
+
+    const filename = file.name.toLowerCase();
+    const allowed = [".pdf", ".png", ".jpg", ".jpeg"];
+
+    if (!allowed.some(ext => filename.endsWith(ext))) {
+      setErrorMessage("Only PDF, PNG, JPG and JPEG files are allowed.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage("Maximum file size is 10 MB.");
+      return;
+    }
+
+    setSelectedFile(file);
+    setIsOcrParsing(true);
+    setOcrStatusMessage('Running Azure AI Document Intelligence / OCR extraction...');
+
+    try {
+      const res = await parseDocumentApi(file);
+      if (res && res.extracted_data) {
+        const extracted = res.extracted_data;
+        setFormData(prev => ({
+          ...prev,
+          claimantName: extracted.claimant_name || prev.claimantName,
+          policyNumber: extracted.policy_number || prev.policyNumber,
+          policyType: extracted.policy_type || prev.policyType,
+          claimType: extracted.claim_type || prev.claimType,
+          amount: extracted.amount ? String(extracted.amount) : prev.amount,
+          incidentDate: extracted.incident_date || prev.incidentDate,
+          description: extracted.description || prev.description
+        }));
+        setOcrStatusMessage(`AI OCR Extraction Success! Auto-populated form for ${extracted.claimant_name || 'Claimant'}.`);
       }
-
-      // Validate Max File Size (10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setErrorMessage("File size exceeds maximum allowed threshold of 10 MB.");
-        return;
-      }
-
-      setSelectedFile(file);
-      setIsOcrParsing(true);
-      setOcrStatusMessage('Running Azure AI Document Intelligence / OCR extraction...');
-
-      try {
-        const res = await parseDocumentApi(file);
-        if (res && res.extracted_data) {
-          const extracted = res.extracted_data;
-          setFormData(prev => ({
-            ...prev,
-            claimantName: extracted.claimant_name || prev.claimantName,
-            policyNumber: extracted.policy_number || prev.policyNumber,
-            policyType: extracted.policy_type || prev.policyType,
-            claimType: extracted.claim_type || prev.claimType,
-            amount: extracted.amount ? String(extracted.amount) : prev.amount,
-            incidentDate: extracted.incident_date || prev.incidentDate,
-            description: extracted.description || prev.description
-          }));
-          setOcrStatusMessage(`AI OCR Extraction Success! Auto-populated form for ${extracted.claimant_name || 'Claimant'}.`);
-        }
-      } catch (err) {
-        console.warn('OCR parsing error:', err);
-        setOcrStatusMessage(`Attached ${file.name} to claim.`);
-      } finally {
-        setIsOcrParsing(false);
-      }
+    } catch (err) {
+      console.warn('OCR parsing error:', err);
+      setOcrStatusMessage(`Attached ${file.name} to claim.`);
+    } finally {
+      setIsOcrParsing(false);
     }
   };
 
   const handleStartProcessing = async () => {
+    if (!selectedFile) {
+      setErrorMessage("Please select a document before submitting.");
+      return;
+    }
+
     setIsProcessing(true);
     setProcessingStep(1);
     setErrorMessage(null);
@@ -184,7 +190,7 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
         <div className="stripe-card p-6 border border-slate-800 bg-[#0f172a] space-y-6">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <h2 className="text-sm font-semibold text-white">Step 1: Claimant & Policy Information</h2>
-            
+
             {/* Auto-fill via OCR upload button */}
             <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 border border-blue-500/40 hover:bg-blue-600/30 text-blue-300 text-xs font-medium rounded-lg transition-colors">
               <Sparkles className="w-3.5 h-3.5 text-blue-400" />
