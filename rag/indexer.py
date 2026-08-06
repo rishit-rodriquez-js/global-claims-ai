@@ -6,34 +6,44 @@ from database.models import PolicyClauseModel
 
 def index_policy_documents():
     """
-    Indexes sample policy files into Azure AI Search or SQLite PolicyClause DB.
+    Indexes policy documents into Azure AI Search index and SQLite PolicyClause DB.
     """
-    search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
-    search_key = os.getenv("AZURE_SEARCH_KEY")
-    search_index = os.getenv("AZURE_SEARCH_INDEX", "insurance-policies-index")
+    search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT") or os.getenv("AZURE_AI_SEARCH_ENDPOINT")
+    search_key = os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")
+    search_index = os.getenv("AZURE_SEARCH_INDEX") or os.getenv("AZURE_AI_SEARCH_INDEX", "insurance-policies-index")
 
-    policies_dir = "./storage/sample_policies"
-    policy_files = glob.glob(os.path.join(policies_dir, "*.txt"))
+    db = SessionLocal()
+    db_clauses = db.query(PolicyClauseModel).all()
+    
+    documents = []
+    for c in db_clauses:
+        documents.append({
+            "id": c.id.replace("-", "_"),
+            "policy_type": c.policy_type,
+            "section_code": c.section_code,
+            "title": c.title,
+            "content": c.content,
+            "coverage_limit": float(c.coverage_limit or 0.0),
+            "deductible": float(c.deductible or 0.0)
+        })
+    db.close()
 
-    print(f"Found {len(policy_files)} policy text files for indexing.")
+    print(f"[RAG INDEXER] Prepared {len(documents)} policy clauses for indexing.")
 
-    if search_endpoint and search_key and search_key != "your_search_key":
+    if search_endpoint and search_key and "your_search" not in search_key.lower():
         try:
-            from azure.search.documents.indexes import SearchIndexClient
             from azure.search.documents import SearchClient
             from azure.core.credentials import AzureKeyCredential
 
-            index_client = SearchIndexClient(search_endpoint, AzureKeyCredential(search_key))
-            print(f"Connected to Azure AI Search endpoint {search_endpoint}")
-            # Azure Search Indexing logic
+            search_client = SearchClient(search_endpoint, search_index, AzureKeyCredential(search_key))
+            result = search_client.upload_documents(documents=documents)
+            succeeded_count = sum(1 for r in result if r.succeeded)
+            print(f"[AZURE AI SEARCH INDEXER SUCCESS] Indexed {succeeded_count}/{len(documents)} documents to index '{search_index}' at {search_endpoint}")
             return True
         except Exception as e:
-            print(f"Azure Search indexing notice: {e}")
+            print(f"[AZURE AI SEARCH INDEXER NOTICE] Indexing notice: {e}. Policy clauses remain active in grounded database RAG.")
 
-    db = SessionLocal()
-    count = db.query(PolicyClauseModel).count()
-    db.close()
-    print(f"Local RAG policy clause database contains {count} active clauses.")
+    print(f"[LOCAL RAG INDEXER] Local database policy clause RAG contains {len(documents)} active clauses.")
     return True
 
 if __name__ == "__main__":

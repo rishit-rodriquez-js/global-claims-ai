@@ -40,7 +40,8 @@ def search_policy_clauses(query: str, policy_type: str, db: Session) -> dict:
                     "source": "Azure AI Search RAG",
                     "clause": retrieved[0]["content"],
                     "title": retrieved[0]["title"],
-                    "similarity": retrieved[0]["score"]
+                    "similarity": retrieved[0]["score"],
+                    "coverage_limit": float(retrieved[0].get("coverage_limit") or 5000.0)
                 }
         except Exception as e:
             print(f"[AZURE AI SEARCH NOTICE] RAG search notice: {e}. Falling back to database policy RAG.")
@@ -58,12 +59,14 @@ def search_policy_clauses(query: str, policy_type: str, db: Session) -> dict:
             "source": "Grounded Policy Database RAG",
             "clause": f"{clause.section_code}: {clause.content}",
             "title": clause.title,
-            "similarity": 0.94
+            "similarity": 0.94,
+            "coverage_limit": float(clause.coverage_limit or 5000.0)
         }
 
     return {
         "source": "Grounded Policy Database RAG",
         "clause": "No matching policy found",
         "title": "Unmatched Policy",
-        "similarity": 0.0
+        "similarity": 0.0,
+        "coverage_limit": 0.0
     }

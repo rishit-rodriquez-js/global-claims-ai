@@ -15,11 +15,11 @@ def run_coverage_agent(claim_data: dict, db: Session) -> dict:
     rag_result = search_policy_clauses(query_str, policy_type, db)
 
     is_covered = True
-    coverage_limit = 2500.0 if "Health" in policy_type else 15000.0
+    coverage_limit = float(rag_result.get("coverage_limit", 5000.0))
     
-    if amount > coverage_limit:
+    if coverage_limit > 0 and amount > coverage_limit:
         is_covered = False
-        reason = f"Claim amount (${amount:,.2f}) exceeds policy category limit (${coverage_limit:,.2f}) under {rag_result['title']}."
+        reason = f"Claim amount (${amount:,.2f}) exceeds policy clause limit (${coverage_limit:,.2f}) under {rag_result['title']}."
     else:
         reason = f"Claim for ${amount:,.2f} evaluated against {rag_result['title']} for {diagnosis}. Fully within policy threshold."
 

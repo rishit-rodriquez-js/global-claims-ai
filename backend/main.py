@@ -915,7 +915,6 @@ async def submit_claim(
         status="UPLOADED"
     )
     db.add(doc_entry)
-    db.add(doc_entry)
 
     # Immutable Audit Log Entries for all 5 Pipeline Stages
     db.add(AuditLogModel(

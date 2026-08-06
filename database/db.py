@@ -116,6 +116,13 @@ def init_db():
 
     db.close()
 
+    # Trigger Azure AI Search policy clause indexing on DB initialization
+    try:
+        from rag.indexer import index_policy_documents
+        index_policy_documents()
+    except Exception as rag_err:
+        print(f"[RAG INDEXING NOTICE] RAG indexer startup notice: {rag_err}")
+
 def get_db():
     db = SessionLocal()
     try:
