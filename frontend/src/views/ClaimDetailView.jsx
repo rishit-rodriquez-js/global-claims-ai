@@ -175,6 +175,7 @@ export default function ClaimDetailView({ claim, onBack, onNavigateOfficer }) {
 
             {/* Embedded Source Document Inspection View */}
             <EmbeddedPdfViewer
+              claimId={claim.id}
               blobUrl={claim.blobUrl}
               documentName={claim.documentName || claim.originalFilename}
               storedBlobName={claim.storedBlobName}

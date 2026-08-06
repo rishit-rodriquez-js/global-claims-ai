@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Download, 
@@ -8,16 +8,44 @@ import {
   RotateCw, 
   Maximize2, 
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Loader2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { fetchClaimDocumentUrl } from '../services/api.js';
 
-export default function EmbeddedPdfViewer({ blobUrl, documentName, storedBlobName, fileSize, ocrText }) {
+export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, storedBlobName, fileSize, ocrText }) {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [rotation, setRotation] = useState(0);
+  const [authorizedUrl, setAuthorizedUrl] = useState(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   const cleanName = documentName || 'uploaded_document.pdf';
-  const displayUrl = blobUrl || `https://globalclaimsstorage.blob.core.windows.net/claims-documents/${storedBlobName || 'document.pdf'}`;
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAuthorizedDocumentUrl() {
+      setIsLoadingAuth(true);
+      if (claimId) {
+        const url = await fetchClaimDocumentUrl(claimId);
+        if (isMounted) {
+          setAuthorizedUrl(url);
+          setIsLoadingAuth(false);
+        }
+      } else {
+        const fallbackUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '') + '/api/claims/CLM-101/document-stream';
+        if (isMounted) {
+          setAuthorizedUrl(fallbackUrl);
+          setIsLoadingAuth(false);
+        }
+      }
+    }
+    loadAuthorizedDocumentUrl();
+    return () => { isMounted = false; };
+  }, [claimId, blobUrl]);
+
+  const displayUrl = authorizedUrl || blobUrl || `https://globalclaimsstorage.blob.core.windows.net/claims-documents/${storedBlobName || 'document.pdf'}`;
 
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 20, 200));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 20, 60));
@@ -34,8 +62,8 @@ export default function EmbeddedPdfViewer({ blobUrl, documentName, storedBlobNam
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-white font-mono truncate max-w-xs">{cleanName}</span>
-              <span className="px-2 py-0.5 rounded-full bg-[#4DFFB4]/10 text-[#4DFFB4] border border-[#4DFFB4]/30 text-[10px] font-mono">
-                Azure Blob Storage
+              <span className="px-2 py-0.5 rounded-full bg-[#4DFFB4]/10 text-[#4DFFB4] border border-[#4DFFB4]/30 text-[10px] font-mono flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" /> Private Azure SAS Authorized
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-md">

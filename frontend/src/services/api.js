@@ -191,6 +191,24 @@ export async function fetchClaimById(claimId) {
 }
 
 /**
+ * Fetch authorized SAS URL or backend document stream URL for private storage
+ */
+export async function fetchClaimDocumentUrl(claimId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/claims/${claimId}/document`, {
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+    });
+    const data = await response.json();
+    if (data && data.documentUrl) {
+      return data.documentUrl;
+    }
+  } catch (error) {
+    console.warn('API Warning (fetchClaimDocumentUrl):', error);
+  }
+  return `${API_BASE_URL}/claims/${claimId}/document-stream`;
+}
+
+/**
  * Submit new claim with file upload to FastAPI -> Azure Blob -> 4-Agent Pipeline
  */
 export async function submitClaimApi(formDataPayload, selectedFile) {

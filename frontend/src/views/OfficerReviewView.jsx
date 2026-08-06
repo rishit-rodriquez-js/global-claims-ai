@@ -189,6 +189,7 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
 
           {/* Embedded Source Document Inspection Viewer */}
           <EmbeddedPdfViewer
+            claimId={activeClaim.id}
             blobUrl={activeClaim.blobUrl}
             documentName={activeClaim.documentName || activeClaim.originalFilename}
             storedBlobName={activeClaim.storedBlobName}
