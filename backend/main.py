@@ -554,15 +554,15 @@ def get_claims(user: UserModel = Depends(get_current_user), db: Session = Depend
             "id": c.id,
             "userId": c.user_id,
             "claimantName": c.claimant_name,
-            "hospitalName": getattr(c, "hospital_name", "Metro Health Medical Center"),
-            "diagnosis": getattr(c, "diagnosis", "Acute Care Consultation"),
-            "invoiceNumber": getattr(c, "invoice_number", "INV-9001"),
+            "hospitalName": c.hospital_name or "Unextracted Facility",
+            "diagnosis": c.diagnosis or "Unextracted Condition",
+            "invoiceNumber": c.invoice_number or "Unextracted",
             "policyNumber": c.policy_number,
             "policyType": c.policy_type,
             "claimType": c.claim_type,
             "amount": c.amount,
             "coveredAmount": c.covered_amount,
-            "submittedDate": c.created_at.split()[0] if c.created_at else "2026-08-05",
+            "submittedDate": c.created_at.split()[0] if c.created_at else datetime.datetime.now().strftime("%Y-%m-%d"),
             "status": c.status,
             "confidence": c.confidence,
             "fraudRisk": c.fraud_risk,
@@ -881,17 +881,16 @@ async def submit_claim(
             blob_client = blob_service.get_blob_client(container=container, blob=stored_blob_name)
             blob_client.upload_blob(file_bytes, overwrite=True)
             
-            # Step 1 & 14: Immediately verify blob exists
-            if not blob_client.exists():
-                logger.error(f"[AZURE BLOB UPLOAD ERROR] Blob existence check failed after upload for '{stored_blob_name}'")
-                raise HTTPException(
-                    status_code=500,
-                    detail={"success": False, "message": "Azure Blob upload verification failed. File blob does not exist after upload."}
-                )
+            # Step 12 & 14: Immediately verify blob properties & ETag
+            props = blob_client.get_blob_properties()
+            etag = getattr(props, 'etag', 'N/A')
+            size = getattr(props, 'size', len(file_bytes))
+            last_modified = getattr(props, 'last_modified', 'N/A')
+            
             blob_url = blob_client.url
             upload_success = True
-            print(f"[AZURE BLOB UPLOAD SUCCESS] Upload Completed & Blob Verified Exists=True | URL: {blob_url}")
-            logger.info(f"Upload Completed | Blob Exists=True | URL: {blob_url}")
+            print(f"[AZURE BLOB UPLOAD SUCCESS] Upload Completed & Blob Verified Exists=True | ETag: {etag} | Size: {size} bytes | Last Modified: {last_modified} | URL: {blob_url}")
+            logger.info(f"Upload Completed | Blob Exists=True | ETag={etag} | Size={size} | URL={blob_url}")
         except HTTPException:
             raise
         except Exception as blob_err:
@@ -1112,133 +1111,6 @@ async def submit_claim(
             status_code=500,
             detail={"success": False, "message": f"Claim processing failed: {pipeline_err}"}
         )
-
-    doc_entry = DocumentModel(
-        id=f"DOC-{uuid.uuid4().hex[:6].upper()}",
-        claim_id=claim_id,
-        original_filename=clean_original_filename,
-        stored_blob_name=stored_blob_name,
-        blob_url=blob_url,
-        container_name=os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents"),
-        document_type=f"{actual_claim_type} Document",
-        content_type="application/pdf",
-        file_size=len(file_bytes),
-        sha256_hash=sha256_hash,
-        upload_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        uploaded_by=actual_user_id,
-        status="UPLOADED"
-    )
-    db.add(doc_entry)
-
-    # Immutable Audit Log Entries for all 5 Pipeline Stages
-    db.add(AuditLogModel(
-        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
-        claim_id=claim_id,
-        agent_name="Storage Agent",
-        action="DOCUMENT_BLOB_UPLOAD",
-        confidence=100.0,
-        decision=f"Uploaded original file '{clean_original_filename}' as stored blob '{stored_blob_name}' to Azure Blob Storage ({blob_url}).",
-        evidence=f"Original Filename: {clean_original_filename} | Azure Blob URL: {blob_url} | Size: {len(file_bytes)} bytes",
-        pii_status="Sanitized & Encryption Active"
-    ))
-
-    # Stage 2: Document OCR Extraction Agent
-    db.add(AuditLogModel(
-        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
-        claim_id=claim_id,
-        agent_name="Document Agent",
-        action="OCR_EXTRACTION",
-        confidence=doc_res.get("confidence", 97.5),
-        decision=f"Extracted fields for patient '{actual_claimant_name}' at '{hospital_name}'. Invoice #{invoice_number}.",
-        evidence=f"Diagnosis: {diagnosis} | Amount: ${actual_amount:,.2f}",
-        pii_status="Masked"
-    ))
-
-    # Stage 3: Policy Coverage RAG Agent
-    db.add(AuditLogModel(
-        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
-        claim_id=claim_id,
-        agent_name="Coverage RAG Agent",
-        action="VECTOR_SEARCH_MATCH",
-        confidence=95.0,
-        decision=f"Grounded policy match retrieved under clause: {dec_res['retrieved_clause'][:60]}...",
-        evidence=f"RAG Vector Score: 0.94 | Clause: {dec_res['retrieved_clause']}",
-        pii_status="Grounded"
-    ))
-
-    # Stage 4: Fraud Detection Agent
-    db.add(AuditLogModel(
-        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
-        claim_id=claim_id,
-        agent_name="Fraud Agent",
-        action="ANOMALY_EVALUATION",
-        confidence=100.0 - fraud_res["fraud_score"],
-        decision=f"Fraud risk calculated at {fraud_res['risk_category']}.",
-        evidence=" | ".join(fraud_res.get("risk_factors", [])),
-        pii_status="Verified"
-    ))
-
-    # Stage 5: Decision Reasoning Agent
-    log_action = "AUTO_APPROVE" if status_verdict == "Approved" else "HUMAN_REVIEW_ESCALATION"
-    db.add(AuditLogModel(
-        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
-        claim_id=claim_id,
-        agent_name="Decision Agent",
-        action=log_action,
-        confidence=dec_res["confidence"],
-        decision=f"Claim evaluated for '{actual_claimant_name}' at '{hospital_name}'. Verdict: {status_verdict}.",
-        evidence=dec_res["explanation"],
-        pii_status="Masked"
-    ))
-
-    db.commit()
-
-    logger.info(f"Successfully processed claim {claim_id} for {actual_claimant_name} with status {status_verdict}")
-
-    created_claim_payload = {
-        "id": claim_id,
-        "userId": actual_user_id,
-        "claimantName": actual_claimant_name,
-        "hospitalName": hospital_name,
-        "diagnosis": diagnosis,
-        "invoiceNumber": invoice_number,
-        "policyNumber": actual_policy_number,
-        "policyType": actual_policy_type,
-        "claimType": actual_claim_type,
-        "amount": actual_amount,
-        "coveredAmount": actual_amount if status_verdict == "Approved" else 0.0,
-        "submittedDate": datetime.datetime.now().strftime("%Y-%m-%d"),
-        "status": status_verdict,
-        "confidence": dec_res["confidence"],
-        "fraudRisk": fraud_res["risk_category"],
-        "fraudScore": fraud_res["fraud_score"],
-        "documentName": clean_original_filename,
-        "originalFilename": clean_original_filename,
-        "storedBlobName": stored_blob_name,
-        "blobUrl": blob_url,
-        "explanation": dec_res["explanation"],
-        "retrievedClause": dec_res["retrieved_clause"],
-        "evidence": dec_res["evidence"],
-        "ocrText": ocr_text,
-        "timeline": [
-            {"step": "Upload", "status": "completed", "timestamp": "Just now", "detail": f"Uploaded {clean_original_filename} to Azure Blob Storage"},
-            {"step": "OCR", "status": "completed", "timestamp": "Just now", "detail": f"Azure AI Document Intelligence extracted fields for {actual_claimant_name} at {hospital_name}"},
-            {"step": "Policy RAG Match", "status": "completed", "timestamp": "Just now", "detail": f"Matched clause: {dec_res['retrieved_clause'][:50]}..."},
-            {"step": "Fraud Analysis", "status": "completed", "timestamp": "Just now", "detail": f"Evaluated fraud risk score: {fraud_res['risk_category']}"},
-            {"step": "AI Decision", "status": "completed", "timestamp": "Just now", "detail": f"Recommendation: {status_verdict} (Confidence: {dec_res['confidence']}%)"}
-        ]
-    }
-
-    return {
-        "status": "success",
-        "claim_id": claim_id,
-        "verdict": status_verdict,
-        "confidence": dec_res["confidence"],
-        "explanation": dec_res["explanation"],
-        "retrieved_clause": dec_res["retrieved_clause"],
-        "evidence": dec_res["evidence"],
-        "claim": created_claim_payload
-    }
 
 # --- EXCEL EXPORT ENDPOINT ---
 

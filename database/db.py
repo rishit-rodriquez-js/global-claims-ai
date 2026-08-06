@@ -77,8 +77,12 @@ def init_db():
         ]
         db.add_all(users)
         db.commit()
-
-
+    # Guarantee business tables start empty (Claims, Documents, Reviews, Audit Logs)
+    db.query(DocumentModel).delete()
+    db.query(ClaimModel).delete()
+    db.query(ReviewModel).delete()
+    db.query(AuditLogModel).delete()
+    db.commit()
 
     # 2. Seed Policy Clauses
     if db.query(PolicyClauseModel).count() == 0:
