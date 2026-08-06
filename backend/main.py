@@ -6,14 +6,24 @@ import datetime
 import re
 import jwt
 import bcrypt
+import logging
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from azure.storage.blob import BlobServiceClient
+
+# Configure Production Hardening Logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("globalclaims")
 
 # Ensure root directory and backend directory are in sys.path
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -22,7 +32,7 @@ if root_dir not in sys.path:
 
 from database.db import init_db, get_db
 from database.models import UserModel, ClaimModel, DocumentModel, AuditLogModel, ReviewModel, PolicyClauseModel
-from utils.guardrails import validate_uploaded_file
+from utils.guardrails import validate_uploaded_file, validate_file_size, sanitize_filename, validate_claim_submission
 from utils.pii_masker import mask_pii
 
 from agents.document_agent import run_document_agent
@@ -171,14 +181,31 @@ allowed_origins = [
     "http://127.0.0.1:8000"
 ]
 
+# Add production deployed frontend URL if configured in .env
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    allowed_origins.append(frontend_url.rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):(3000|5173|5174|8000).*",
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled server error on {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "message": "An unexpected server error occurred.",
+            "details": str(exc) if os.getenv("ENVIRONMENT") == "development" else "Internal server error."
+        }
+    )
 
 @app.get("/")
 def read_root():
@@ -191,9 +218,24 @@ def read_root():
         "azure_search_configured": bool(os.getenv("AZURE_SEARCH_KEY") and os.getenv("AZURE_SEARCH_KEY") != "your_search_key")
     }
 
+@app.get("/health")
 @app.get("/api/health")
-def health_check():
-    return {"status": "ok", "message": "Backend service is operational"}
+def health_check(db: Session = Depends(get_db)):
+    db_status = "connected"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "disconnected"
+
+    return {
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "database": db_status,
+        "azure_blob": "connected" if os.getenv("AZURE_STORAGE_CONNECTION_STRING") else "configured_mock",
+        "azure_openai": "connected" if os.getenv("AZURE_OPENAI_KEY") else "configured_mock",
+        "document_intelligence": "connected" if os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY") else "configured_mock",
+        "ai_search": "connected" if (os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")) else "configured_mock"
+    }
 
 # --- USERS & AUTH ENDPOINTS ---
 
@@ -468,14 +510,20 @@ def get_claim_detail(claim_id: str, user: UserModel = Depends(get_current_user),
 @app.post("/api/claims/parse-document")
 async def parse_document(file: UploadFile = File(...), user: UserModel = Depends(get_current_user)):
     if not file:
-        raise HTTPException(status_code=400, detail="No file provided")
+        raise HTTPException(status_code=400, detail={"success": False, "message": "No file provided.", "details": "PDF document is required."})
+    
+    validate_uploaded_file(file)
     file_bytes = await file.read()
-    filename = file.filename
-    doc_res = run_document_agent(file_bytes, filename)
+    validate_file_size(file_bytes)
+    
+    clean_filename = sanitize_filename(file.filename)
+    logger.info(f"Parsing document '{clean_filename}' ({len(file_bytes)} bytes) for user '{user.email}'")
+
+    doc_res = run_document_agent(file_bytes, clean_filename)
     parsed = doc_res.get("parsed_data", {})
     return {
         "status": "success",
-        "filename": filename,
+        "filename": clean_filename,
         "extracted_data": parsed,
         "raw_ocr": doc_res
     }
@@ -494,15 +542,19 @@ async def submit_claim(
     user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Validate payload parameters
+    validate_claim_submission(amount, policy_number or "POL-HTH-7721", claimant_name)
+
     file_bytes = b""
-    filename = file.filename if file else f"claim_doc_{uuid.uuid4().hex[:6]}.pdf"
-    blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
+    clean_filename = sanitize_filename(file.filename) if file else f"claim_doc_{uuid.uuid4().hex[:6]}.pdf"
+    blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{clean_filename}"
 
     if file:
         validate_uploaded_file(file)
         file_bytes = await file.read()
-        filename = file.filename
-        blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{filename}"
+        validate_file_size(file_bytes)
+        clean_filename = sanitize_filename(file.filename)
+        blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{clean_filename}"
 
         connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         try:

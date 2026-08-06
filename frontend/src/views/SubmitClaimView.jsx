@@ -26,6 +26,20 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
   const handleFileChange = async (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      setErrorMessage(null);
+
+      // Validate PDF only
+      if (!file.name.toLowerCase().endswith('.pdf')) {
+        setErrorMessage("Only PDF documents (.pdf) are accepted for AI claims processing.");
+        return;
+      }
+
+      // Validate Max File Size (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setErrorMessage("File size exceeds maximum allowed threshold of 10 MB.");
+        return;
+      }
+
       setSelectedFile(file);
       setIsOcrParsing(true);
       setOcrStatusMessage('Running Azure AI Document Intelligence / OCR extraction...');
