@@ -66,15 +66,26 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             logger.warning(f"Raw file text decoding notice: {decode_err}")
             raw_text = ""
 
-    # Comprehensive Regex Extraction Patterns for generated PDFs and live invoices
-    claimant_match = re.search(r'(?:Claimant Full Name|Claimant Name|Claimant|Patient Name|Patient|Customer|Recipient)[:\s]+([A-Za-z0-9\s._-]+)', raw_text, re.IGNORECASE)
+    # Comprehensive Regex Extraction Patterns with Disambiguation & Multi-line Support
+    claimant_match = re.search(r'(?:Claimant Full Name|Claimant Name|Claimant|Patient Name|Patient|Customer|Recipient)[:\s]+([A-Za-z0-9\s._-]+?)(?=\s+(?:Policy|Claim|Amount|Date|Invoice|Facility)|$|\n)', raw_text, re.IGNORECASE)
     policy_match = re.search(r'(?:Policy Number|Policy #|Policy|Pol)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
     policy_type_match = re.search(r'(?:Policy Category|Policy Type|Category)[:\s]+([A-Za-z0-9\s-]+)', raw_text, re.IGNORECASE)
     claim_type_match = re.search(r'(?:Claim Type|Type)[:\s]+([A-Za-z0-9\s-]+)', raw_text, re.IGNORECASE)
-    hospital_match = re.search(r'(?:Hospital|Facility|Center|Clinic|Provider|Repair Shop|Repair Center|Vendor)[:\s]+([A-Za-z0-9\s.,-]+)', raw_text, re.IGNORECASE)
+    
+    # Separate Repair Facility / Hospital from Vehicle Make/Model
+    facility_match = re.search(r'(?:Repair Facility|Facility|Hospital|Provider|Clinic|Center|Vendor)[:\s]+([A-Za-z0-9\s.,-]+?)(?=\s+(?:Vehicle|Policy|Claim|Amount|Date|Invoice)|$|\n)', raw_text, re.IGNORECASE)
+    vehicle_match = re.search(r'(?:Vehicle|Car|Make/Model|Model)[:\s]+([A-Za-z0-9\s.,-]+?)(?=\s+(?:Policy|Claim|Amount|Date|Invoice|Diagnosis)|$|\n)', raw_text, re.IGNORECASE)
+
     invoice_match = re.search(r'(?:Invoice Number|Invoice #|Invoice|Inv|Receipt)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
     amount_match = re.search(r'(?:Claim Amount|Total Amount|Amount|Total|Balance|Due)[:\s$]+([\d,]+\.?\d*)', raw_text, re.IGNORECASE)
-    diagnosis_match = re.search(r'(?:Incident Description|Description|Diagnosis|Reason|Condition|Damage)[:\s]+([^\n\r]+)', raw_text, re.IGNORECASE)
+    date_match = re.search(r'(?:Incident Date|Date)[:\s]+([\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}]+)', raw_text, re.IGNORECASE)
+
+    # Multi-line Diagnosis & Incident Description Capture (until next section header)
+    multiline_diag_match = re.search(
+        r'(?:Diagnosis / Treatment|Diagnosis|Treatment|Incident Description|Description|Damage Details|Itemized Services)[:\s]+([\s\S]+?)(?=\n\s*(?:Claim Amount|Total Amount|Amount|Invoice Number|Invoice #|Policy Number|Date|Signature)|$)',
+        raw_text,
+        re.IGNORECASE
+    )
 
     # Filename or content semantic detection
     is_auto = any(term in file_name.lower() or term in raw_text.lower() for term in ["auto", "collision", "vehicle", "repair", "car"])
@@ -108,14 +119,19 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
 
     hospital_name = (
         extracted_fields.get("VendorName") or 
-        (hospital_match.group(1).strip() if hospital_match else None) or 
+        (facility_match.group(1).strip() if facility_match else None) or 
         "Unextracted Facility"
     )
 
-    diagnosis = (
-        (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
-        "Unextracted Condition"
-    )
+    vehicle_info = (vehicle_match.group(1).strip() if vehicle_match else "")
+
+    if multiline_diag_match:
+        raw_lines = [line.strip() for line in multiline_diag_match.group(1).splitlines() if line.strip()]
+        diagnosis = "\n".join(raw_lines)
+    else:
+        diagnosis = "Unextracted Condition"
+
+    incident_date_val = (date_match.group(1).strip() if date_match else datetime.datetime.now().strftime("%Y-%m-%d"))
 
     invoice_number = (
         extracted_fields.get("InvoiceId") or 
@@ -175,6 +191,7 @@ Raw Stream Length: {len(file_bytes)} bytes
             "document_name": file_name,
             "claimant_name": claimant_name,
             "hospital_name": hospital_name,
+            "vehicle": vehicle_info,
             "policy_number": policy_number,
             "invoice_number": invoice_number,
             "diagnosis": diagnosis,
@@ -184,13 +201,14 @@ Raw Stream Length: {len(file_bytes)} bytes
         "parsed_data": {
             "claimant_name": claimant_name,
             "hospital_name": hospital_name,
+            "vehicle": vehicle_info,
             "policy_number": policy_number,
             "invoice_number": invoice_number,
             "diagnosis": diagnosis,
-            "policy_type": "Health Standard" if "HTH" in policy_number else "Auto Premium",
-            "claim_type": "Emergency Medical" if "HTH" in policy_number else "Vehicle Repair",
+            "policy_type": policy_type,
+            "claim_type": claim_type,
             "amount": amount_val,
-            "incident_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-            "description": f"Extracted itemized bill for {claimant_name} at {hospital_name}. Diagnosis: {diagnosis}."
+            "incident_date": incident_date_val,
+            "description": f"Extracted itemized bill for {claimant_name} at {hospital_name}. {('Vehicle: ' + vehicle_info + '.') if vehicle_info else ''} Details:\n{diagnosis}"
         }
     }

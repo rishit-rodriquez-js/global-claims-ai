@@ -810,6 +810,81 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
         }
     )
 
+@app.get("/api/claims/{claim_id}/document-download")
+def download_claim_document(claim_id: str, db: Session = Depends(get_db)):
+    """
+    Dedicated endpoint for user-triggered explicit file downloads.
+    Returns Content-Disposition: attachment header.
+    """
+    clean_id = claim_id.strip().upper()
+    c = db.query(ClaimModel).filter(ClaimModel.id.ilike(clean_id)).first()
+    if not c:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "code": "CLAIM_NOT_FOUND",
+                "message": f"Claim with ID '{clean_id}' could not be located."
+            }
+        )
+
+    docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
+    doc = docs[0] if docs else None
+    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None)
+    orig_name = c.original_filename or (doc.original_filename if doc else None) or stored_name
+
+    if not stored_name:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "code": "DOCUMENT_METADATA_MISSING",
+                "message": f"Document blob metadata for claim '{clean_id}' is missing."
+            }
+        )
+
+    # 1. Check Azure Blob Storage stream first
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    if connection_string and "your_azure_storage" not in connection_string.lower():
+        try:
+            container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
+            blob_service = BlobServiceClient.from_connection_string(connection_string)
+            blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
+            if blob_client.exists():
+                stream = blob_client.download_blob()
+                pdf_bytes = stream.readall()
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=\"{orig_name}\""}
+                )
+        except Exception as e:
+            logger.warning(f"Blob download read notice for {stored_name}: {e}")
+
+    # 2. Check local disk persistence storage/uploads/ second
+    local_upload_dir = os.path.join(root_dir, "storage", "uploads")
+    local_file_path = os.path.join(local_upload_dir, stored_name)
+    if os.path.exists(local_file_path):
+        try:
+            with open(local_file_path, "rb") as f:
+                pdf_bytes = f.read()
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=\"{orig_name}\""}
+                )
+        except Exception as local_err:
+            logger.warning(f"Local file download notice for {stored_name}: {local_err}")
+
+    return JSONResponse(
+        status_code=404,
+        content={
+            "success": False,
+            "code": "DOCUMENT_NOT_FOUND",
+            "message": f"Uploaded document file '{stored_name}' for claim '{clean_id}' could not be located."
+        }
+    )
+
 @app.post("/api/claims/parse-document")
 async def parse_document(file: UploadFile = File(...), user: UserModel = Depends(get_current_user)):
     if not file:

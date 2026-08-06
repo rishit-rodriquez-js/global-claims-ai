@@ -45,9 +45,9 @@ export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, stor
     return () => { isMounted = false; };
   }, [claimId, blobUrl]);
 
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
-  const fallbackStreamUrl = claimId ? `${apiBase}/api/claims/${claimId}/document-stream` : `${apiBase}/api/claims/CLM-101/document-stream`;
-  const displayUrl = authorizedUrl || fallbackStreamUrl;
+  const apiBase = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '') + '/api';
+  const previewStreamUrl = claimId ? `${apiBase}/claims/${claimId}/document-stream` : `${apiBase}/claims/CLM-101/document-stream`;
+  const explicitDownloadUrl = claimId ? `${apiBase}/claims/${claimId}/document-download` : `${apiBase}/claims/CLM-101/document-download`;
 
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 20, 200));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 20, 60));
@@ -65,11 +65,11 @@ export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, stor
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-white font-mono truncate max-w-xs">{cleanName}</span>
               <span className="px-2 py-0.5 rounded-full bg-[#4DFFB4]/10 text-[#4DFFB4] border border-[#4DFFB4]/30 text-[10px] font-mono flex items-center gap-1">
-                <Lock className="w-2.5 h-2.5" /> Private Azure SAS Authorized
+                <Lock className="w-2.5 h-2.5" /> Inline Stream Mode
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-md">
-              {displayUrl}
+              {previewStreamUrl}
             </p>
           </div>
         </div>
@@ -100,17 +100,17 @@ export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, stor
           </button>
 
           <a
-            href={displayUrl}
+            href={previewStreamUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="px-3 py-2 rounded-xl bg-[#3BCBFF]/10 text-[#3BCBFF] border border-[#3BCBFF]/30 hover:bg-[#3BCBFF]/20 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span>Open Original</span>
+            <span>Open Stream</span>
           </a>
 
           <a
-            href={displayUrl}
+            href={explicitDownloadUrl}
             download={cleanName}
             className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#4DFFB4] to-[#3BCBFF] text-[#081018] font-bold text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(77,255,180,0.3)] hover:opacity-90 transition-all"
           >
@@ -122,9 +122,9 @@ export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, stor
 
       {/* Embedded Document View Canvas */}
       <div className="relative w-full h-96 min-h-[400px] bg-[#081018] overflow-auto flex items-center justify-center p-4">
-        {displayUrl && (displayUrl.startsWith('http://') || displayUrl.startsWith('https://')) ? (
+        {previewStreamUrl ? (
           <iframe
-            src={displayUrl}
+            src={previewStreamUrl}
             title={cleanName}
             className="w-full h-full border-none rounded-xl bg-white shadow-2xl transition-transform"
             style={{
