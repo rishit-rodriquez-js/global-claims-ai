@@ -4,6 +4,22 @@ import ProgressTimeline from '../components/ProgressTimeline.jsx';
 import { submitClaimApi, parseDocumentApi } from '../services/api.js';
 import { motion, AnimatePresence } from 'framer-motion';
 
+function formatIsoDate(dateStr) {
+  if (!dateStr) return new Date().toISOString().split('T')[0];
+  const str = String(dateStr).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const dmMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmMatch) {
+    return `${dmMatch[3]}-${dmMatch[2].padStart(2, '0')}-${dmMatch[1].padStart(2, '0')}`;
+  }
+  const ymMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (ymMatch) {
+    return `${ymMatch[1]}-${ymMatch[2].padStart(2, '0')}-${ymMatch[3].padStart(2, '0')}`;
+  }
+  const d = new Date(str);
+  return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+}
+
 export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -48,8 +64,9 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
 
     try {
       const res = await parseDocumentApi(file);
-      if (res && res.extracted_data) {
-        const extracted = res.extracted_data;
+      if (res && (res.extracted_data || res.incident_date)) {
+        const extracted = res.extracted_data || {};
+        const rawDate = extracted.incident_date || res.incident_date;
         setFormData(prev => ({
           ...prev,
           claimantName: extracted.claimant_name || prev.claimantName,
@@ -57,7 +74,7 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
           policyType: extracted.policy_type || prev.policyType,
           claimType: extracted.claim_type || prev.claimType,
           amount: extracted.amount ? String(extracted.amount) : prev.amount,
-          incidentDate: extracted.incident_date || prev.incidentDate,
+          incidentDate: formatIsoDate(rawDate),
           description: extracted.description || prev.description
         }));
         setOcrStatusMessage(`AI OCR Extraction Success! Auto-populated form for ${extracted.claimant_name || 'Claimant'}.`);

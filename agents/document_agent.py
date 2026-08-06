@@ -87,6 +87,28 @@ def sanitize_fallback_value(val: str) -> str:
     return cleaned.strip()
 
 
+def normalize_date_to_iso(date_str: str) -> str:
+    """Normalizes any date string (DD-MM-YYYY, DD/MM/YYYY, YYYY/MM/DD) to ISO YYYY-MM-DD required by HTML5 date inputs."""
+    if not date_str:
+        return datetime.datetime.now().strftime("%Y-%m-%d")
+    clean_str = date_str.strip()
+    
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', clean_str):
+        return clean_str
+
+    dm_match = re.match(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$', clean_str)
+    if dm_match:
+        day, month, year = dm_match.group(1).zfill(2), dm_match.group(2).zfill(2), dm_match.group(3)
+        return f"{year}-{month}-{day}"
+
+    ym_match = re.match(r'^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$', clean_str)
+    if ym_match:
+        year, month, day = ym_match.group(1), ym_match.group(2).zfill(2), ym_match.group(3).zfill(2)
+        return f"{year}-{month}-{day}"
+
+    return datetime.datetime.now().strftime("%Y-%m-%d")
+
+
 def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     """
     Agent 1: Document Extraction Agent.
@@ -209,7 +231,7 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
         parsed_pairs.get("diagnosis") or "Unextracted Condition"
     )
 
-    incident_date_val = (
+    raw_date = (
         extracted_fields.get("IncidentDate") or
         extracted_fields.get("Incident Date") or
         extracted_fields.get("InvoiceDate") or
@@ -221,6 +243,7 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
         (date_match.group(1).strip() if date_match else None) or
         datetime.datetime.now().strftime("%Y-%m-%d")
     )
+    incident_date_val = normalize_date_to_iso(raw_date)
 
     invoice_number = (
         extracted_fields.get("InvoiceId") or
