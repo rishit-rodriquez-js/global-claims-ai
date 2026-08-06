@@ -25,8 +25,8 @@ def generate_query_embedding(query_text: str) -> list:
             logger.info(f"--- AZURE OPENAI EMBEDDINGS --- Generated vector ({len(vector)} dims) for deployment '{deployment}'")
             return vector
         except Exception as embed_err:
-            logger.warning(f"Azure OpenAI Embedding generation notice: {embed_err}")
-            print(f"[AZURE OPENAI EMBEDDINGS NOTICE] {embed_err}")
+            logger.warning(f"Azure OpenAI Embedding generation notice: {embed_err} | deployment='{deployment}' | endpoint='{clean_endpoint}'")
+            print(f"[AZURE OPENAI EMBEDDINGS NOTICE] {embed_err} | deployment='{deployment}'")
     return []
 
 def search_policy_clauses(query: str, policy_type: str, db: Session) -> dict:
