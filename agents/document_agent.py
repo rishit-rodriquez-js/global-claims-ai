@@ -28,14 +28,15 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             for doc in result.documents:
                 for field_name, field in doc.fields.items():
                     extracted_fields[field_name] = field.content
-        except Exception:
-            pass
+        except Exception as doc_err:
+            logger.warning(f"Azure AI Document Intelligence notice: {doc_err}. Proceeding with byte parsing.")
 
     # Extract text from raw bytes
     raw_text = ""
     try:
         raw_text = file_bytes.decode('utf-8', errors='ignore')
-    except Exception:
+    except Exception as decode_err:
+        logger.warning(f"Raw file text decoding notice: {decode_err}")
         raw_text = ""
 
     # Regex extraction attempts

@@ -63,7 +63,7 @@ def search_policy_clauses(query: str, policy_type: str, db: Session) -> dict:
 
     return {
         "source": "Grounded Policy Database RAG",
-        "clause": "Section GENERAL-100: Policy rules subject to standard coverage conditions.",
-        "title": "General Policy Terms",
-        "similarity": 0.85
+        "clause": "No matching policy found",
+        "title": "Unmatched Policy",
+        "similarity": 0.0
     }

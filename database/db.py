@@ -36,8 +36,8 @@ def init_db():
         print(f"[DB MIGRATION NOTICE] SQLite schema update: {e}. Recreating tables cleanly.")
         try:
             Base.metadata.drop_all(bind=engine)
-        except Exception:
-            pass
+        except Exception as drop_err:
+            print(f"[DB RESET NOTICE] Table drop notice: {drop_err}")
 
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
