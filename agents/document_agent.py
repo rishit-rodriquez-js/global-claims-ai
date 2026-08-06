@@ -47,30 +47,13 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     diagnosis_match = re.search(r'(?:Diagnosis|Reason|Condition|Damage)[:\s]+([A-Za-z0-9\s.,]+)', raw_text, re.IGNORECASE)
 
     # Compute a deterministic seed from file contents & name to guarantee unique outputs for every distinct upload
-    file_hash = hashlib.sha256(file_bytes + file_name.encode('utf-8')).hexdigest()
-    hash_num = int(file_hash[:8], 16)
-
-    names_pool = [
-        "Marcus Thorne", "Elena Rostova", "David Vance", "Chloe Bennet", 
-        "Arthur Pendelton", "Siddharth Rao", "Sophia Martinez", "Liam O'Connor",
-        "Hannah Abbott", "Victor Vance", "Nora Sterling", "Gabriel Hayes"
-    ]
-    hospitals_pool = [
-        "St. Jude Memorial Hospital", "Mercy General Medical Center", 
-        "City Cardiology & Emergency", "Valley Healthcare Institute", 
-        "Apex Surgical & Outpatient Center", "St. Anthony Regional Hospital"
-    ]
-    diagnoses_pool = [
-        "Acute Gastroenteritis & ER Care", "Lumbar Spine MRI & Orthopedic Consult",
-        "Coronary Angiography & Diagnostics", "Minor Laceration Suture & ER Triage",
-        "Chest X-Ray & Bronchial Evaluation", "Laparoscopic Surgical Procedure"
-    ]
+    # Compute SHA256 file hash for transaction verification
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
 
     # Filename or content semantic detection
     is_auto = any(term in file_name.lower() or term in raw_text.lower() for term in ["auto", "collision", "vehicle", "repair", "car"])
     is_rishit = "rishit" in file_name.lower() or "rishit" in raw_text.lower()
 
-    # Assign derived values
     if is_rishit:
         claimant_name = "Rishit Rodriquez J S"
     else:
@@ -78,12 +61,19 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             extracted_fields.get("CustomerName") or 
             extracted_fields.get("Recipient") or 
             (claimant_match.group(1).strip() if claimant_match else None) or 
-            names_pool[hash_num % len(names_pool)]
+            "Unextracted (Officer Review Required)"
         )
 
     if is_auto:
-        hospital_name = "Apex Auto Collision Center"
-        diagnosis = "Front Bumper & Radiator Collision Repair"
+        hospital_name = (
+            extracted_fields.get("VendorName") or 
+            (hospital_match.group(1).strip() if hospital_match else None) or 
+            "Apex Auto Collision Repair"
+        )
+        diagnosis = (
+            (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
+            "Collision Damage & Body Repair"
+        )
         policy_type = "Auto Premium"
         claim_type = "Collision Damage Repair"
         policy_number = (
@@ -95,9 +85,19 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
         hospital_name = (
             extracted_fields.get("VendorName") or 
             (hospital_match.group(1).strip() if hospital_match else None) or 
-            hospitals_pool[(hash_num // 3) % len(hospitals_pool)]
+            "Unextracted Medical Facility"
         )
         diagnosis = (
+            (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
+            "Unextracted Medical Condition"
+        )
+        policy_type = "Health Standard"
+        claim_type = "Emergency Medical"
+        policy_number = (
+            extracted_fields.get("PolicyNumber") or 
+            (policy_match.group(1) if policy_match else None) or 
+            "POL-HTH-7721"
+        )
             (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
             diagnoses_pool[(hash_num // 5) % len(diagnoses_pool)]
         )

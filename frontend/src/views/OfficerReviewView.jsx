@@ -18,7 +18,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, currentUser }) {
-  const pendingClaims = claims.filter(c => c.status === 'Human Review' || c.status === 'NEW' || c.status === 'IN_REVIEW');
+  const pendingClaims = claims.filter(c => c.status === 'HUMAN_REVIEW' || c.status === 'Human Review' || c.status === 'NEW' || c.status === 'IN_REVIEW');
   const [selectedClaimId, setSelectedClaimId] = useState(pendingClaims[0]?.id || claims[0]?.id);
   const [officerNotes, setOfficerNotes] = useState('');
   const [statusMessage, setStatusMessage] = useState(null);
@@ -28,7 +28,7 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
 
   // Auto-sync selected claim when claims list updates or new claim is uploaded
   useEffect(() => {
-    const newestPending = claims.find(c => c.status === 'Human Review' || c.status === 'NEW' || c.status === 'IN_REVIEW') || claims[0];
+    const newestPending = claims.find(c => c.status === 'HUMAN_REVIEW' || c.status === 'Human Review' || c.status === 'NEW' || c.status === 'IN_REVIEW') || claims[0];
     if (newestPending && (!selectedClaimId || !claims.some(c => c.id === selectedClaimId))) {
       setSelectedClaimId(newestPending.id);
     }

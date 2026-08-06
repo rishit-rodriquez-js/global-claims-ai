@@ -236,18 +236,50 @@ def health_check(db: Session = Depends(get_db)):
     has_doc_intel = bool(os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY") and "your_doc_intel" not in os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY").lower())
     has_search = bool((os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")) and "your_search" not in str(os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")).lower())
 
-    return {
-        "status": "healthy" if db_status == "connected" else "degraded",
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "services": {
-            "database": {"status": db_status, "latencyMs": db_latency_ms},
-            "jwt_auth": {"status": "configured", "secretSet": bool(os.getenv("JWT_SECRET") or os.getenv("SECRET_KEY"))},
-            "azure_blob": {"status": "connected" if has_blob else "mock_configured"},
-            "azure_openai": {"status": "connected" if has_openai else "mock_configured"},
-            "document_intelligence": {"status": "connected" if has_doc_intel else "mock_configured"},
-            "ai_search": {"status": "connected" if has_search else "mock_configured"}
-        }
-    }
+@app.get("/health/database")
+def health_database(db: Session = Depends(get_db)):
+    t0 = datetime.datetime.now()
+    try:
+        db.execute(text("SELECT 1"))
+        latency = round((datetime.datetime.now() - t0).total_seconds() * 1000, 2)
+        return {"status": "healthy", "service": "database", "latencyMs": latency}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"status": "unhealthy", "service": "database", "error": str(e)})
+
+@app.get("/health/blob")
+def health_blob():
+    conn = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    if conn and "your_azure_storage" not in conn.lower():
+        try:
+            blob_service = BlobServiceClient.from_connection_string(conn)
+            container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
+            client = blob_service.get_container_client(container)
+            exists = client.exists()
+            return {"status": "healthy" if exists else "degraded", "service": "azure_blob", "containerExists": exists}
+        except Exception as e:
+            return JSONResponse(status_code=503, content={"status": "unhealthy", "service": "azure_blob", "error": str(e)})
+    return {"status": "configured_mock", "service": "azure_blob"}
+
+@app.get("/health/document-intelligence")
+def health_doc_intel():
+    key = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY")
+    endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
+    configured = bool(key and key != "your_doc_intel_key" and endpoint)
+    return {"status": "healthy" if configured else "configured_mock", "service": "document_intelligence", "configured": configured}
+
+@app.get("/health/openai")
+def health_openai():
+    key = os.getenv("AZURE_OPENAI_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    configured = bool(key and key != "your_azure_openai_key" and endpoint)
+    return {"status": "healthy" if configured else "configured_mock", "service": "azure_openai", "configured": configured}
+
+@app.get("/health/search")
+def health_search():
+    key = os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")
+    endpoint = os.getenv("AZURE_SEARCH_ENDPOINT") or os.getenv("AZURE_AI_SEARCH_ENDPOINT")
+    configured = bool(key and key != "your_search_key" and endpoint)
+    return {"status": "healthy" if configured else "configured_mock", "service": "azure_search", "configured": configured}
 
 # --- USERS & AUTH ENDPOINTS ---
 
@@ -750,6 +782,9 @@ async def submit_claim(
     print(f"[AZURE BLOB UPLOAD] Upload successful: {upload_success}")
     print(f"[AZURE BLOB UPLOAD] Blob URL: {blob_url}")
 
+    # Calculate SHA256 file hash for transaction verification
+    sha256_hash = hashlib.sha256(file_bytes).hexdigest() if file_bytes else None
+
     # Start Telemetry Pipeline Timer
     pipeline_t0 = datetime.datetime.now()
 
@@ -759,7 +794,7 @@ async def submit_claim(
     ocr_time_ms = round((datetime.datetime.now() - ocr_t0).total_seconds() * 1000, 2)
     parsed = doc_res.get("parsed_data", {})
 
-    logger.info(f"--- OCR EXTRACTION SUCCESS --- File: {clean_original_filename} ({ocr_time_ms} ms) | Fields Extracted: {len(parsed)}")
+    logger.info(f"--- OCR EXTRACTION SUCCESS --- File: {clean_original_filename} ({ocr_time_ms} ms) | SHA256: {sha256_hash[:12] if sha256_hash else 'N/A'}")
 
     actual_user_id = user.id if user else (user_id or "USR-101")
     actual_claimant_name = claimant_name if claimant_name else (parsed.get("claimant_name") or (user.name if user else "Claimant"))
@@ -803,8 +838,8 @@ async def submit_claim(
     claim_id = f"CLM-{uuid.uuid4().hex[:6].upper()}"
     status_verdict = dec_res["recommendation"]
     
-    # Claim Status Lifecycle Flow: NEW, IN_REVIEW, APPROVED, REJECTED, MORE_INFO_REQUIRED
-    initial_status = "NEW" if status_verdict == "Human Review" else status_verdict
+    # Normalized Status Constants: NEW, HUMAN_REVIEW, APPROVED, REJECTED, MORE_INFO_REQUIRED
+    final_status = "APPROVED" if status_verdict == "Approved" else "HUMAN_REVIEW"
 
     new_claim = ClaimModel(
         id=claim_id,
@@ -817,8 +852,8 @@ async def submit_claim(
         policy_type=actual_policy_type,
         claim_type=actual_claim_type,
         amount=actual_amount,
-        covered_amount=actual_amount if initial_status == "APPROVED" or status_verdict == "Approved" else 0.0,
-        status="Human Review" if initial_status in ["NEW", "IN_REVIEW"] else initial_status,
+        covered_amount=actual_amount if final_status == "APPROVED" else 0.0,
+        status=final_status,
         confidence=dec_res["confidence"],
         fraud_risk=fraud_res["risk_category"],
         fraud_score=fraud_res["fraud_score"],
@@ -842,10 +877,16 @@ async def submit_claim(
         original_filename=clean_original_filename,
         stored_blob_name=stored_blob_name,
         blob_url=blob_url,
+        container_name=os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents"),
         document_type=f"{actual_claim_type} Document",
         content_type="application/pdf",
-        file_size=len(file_bytes)
+        file_size=len(file_bytes),
+        sha256_hash=sha256_hash,
+        upload_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        uploaded_by=actual_user_id,
+        status="UPLOADED"
     )
+    db.add(doc_entry)
     db.add(doc_entry)
 
     # Immutable Audit Log Entries for all 5 Pipeline Stages
