@@ -586,38 +586,20 @@ def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = De
     docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
     
+    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None) or f"claim_doc_{c.id.lower()}.pdf"
     orig_name = c.original_filename or (doc.original_filename if doc else f"{c.id.lower()}_document.pdf")
     container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
 
-    # Build candidate blob names prioritizing specific claim-linked blob names over default generic "document.pdf"
-    candidate_names = []
-    if c.stored_blob_name and c.stored_blob_name.lower() != "document.pdf":
-        candidate_names.append(c.stored_blob_name)
-    if doc and doc.stored_blob_name and doc.stored_blob_name.lower() != "document.pdf":
-        candidate_names.append(doc.stored_blob_name)
-    candidate_names.append(f"claim_doc_{c.id.lower()}.pdf")
-    candidate_names.append(f"{c.id.lower()}.pdf")
-    candidate_names.append("document.pdf")
-
-    # Deduplicate candidate names preserving order
-    seen = set()
-    unique_candidates = [x for x in candidate_names if not (x in seen or seen.add(x))]
-
-    stored_name = unique_candidates[0]
-    blob_exists = False
+    # Verify blob exists in Azure Storage Account for stored_name directly from DB
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-
+    blob_exists = False
     if connection_string and "your_azure_storage" not in connection_string.lower():
         try:
             blob_service = BlobServiceClient.from_connection_string(connection_string)
-            for cand in unique_candidates:
-                blob_client = blob_service.get_blob_client(container=container, blob=cand)
-                if blob_client.exists():
-                    stored_name = cand
-                    blob_exists = True
-                    break
+            blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
+            blob_exists = blob_client.exists()
         except Exception as err:
-            logger.warning(f"Blob existence check warning: {err}")
+            logger.warning(f"Blob existence check warning for '{stored_name}': {err}")
 
     sas_url = generate_azure_sas_url(container, stored_name) if blob_exists else None
     
@@ -658,39 +640,25 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
 
     docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
+    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None) or f"claim_doc_{c.id.lower()}.pdf"
     orig_name = c.original_filename or (doc.original_filename if doc else f"{c.id.lower()}_document.pdf")
-
-    candidate_names = []
-    if c.stored_blob_name and c.stored_blob_name.lower() != "document.pdf":
-        candidate_names.append(c.stored_blob_name)
-    if doc and doc.stored_blob_name and doc.stored_blob_name.lower() != "document.pdf":
-        candidate_names.append(doc.stored_blob_name)
-    candidate_names.append(f"claim_doc_{c.id.lower()}.pdf")
-    candidate_names.append(f"{c.id.lower()}.pdf")
-    candidate_names.append("document.pdf")
-
-    seen = set()
-    unique_candidates = [x for x in candidate_names if not (x in seen or seen.add(x))]
-    stored_name = unique_candidates[0]
 
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if connection_string and "your_azure_storage" not in connection_string.lower():
         try:
             container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
             blob_service = BlobServiceClient.from_connection_string(connection_string)
-            for cand in unique_candidates:
-                blob_client = blob_service.get_blob_client(container=container, blob=cand)
-                if blob_client.exists():
-                    stored_name = cand
-                    stream = blob_client.download_blob()
-                    pdf_bytes = stream.readall()
-                    return Response(
-                        content=pdf_bytes,
-                        media_type="application/pdf",
-                        headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
-                    )
+            blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
+            if blob_client.exists():
+                stream = blob_client.download_blob()
+                pdf_bytes = stream.readall()
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
+                )
         except Exception as e:
-            logger.warning(f"Blob stream direct read fallback for {stored_name}: {e}")
+            logger.warning(f"Blob stream direct read notice for {stored_name}: {e}")
 
     pdf_content = f"""%PDF-1.4
 1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj
@@ -752,6 +720,7 @@ async def submit_claim(
     clean_original_filename = sanitize_filename(original_filename)
     stored_blob_name = f"claim_doc_{uuid.uuid4().hex[:8]}.pdf"
     blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{stored_blob_name}"
+    upload_success = False
 
     if file:
         validate_uploaded_file(file)
@@ -761,19 +730,25 @@ async def submit_claim(
         clean_original_filename = sanitize_filename(original_filename)
 
         connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-        if connection_string and connection_string != "your_azure_storage_connection_string":
+        if connection_string and "your_azure_storage" not in connection_string.lower():
             try:
                 blob_service = BlobServiceClient.from_connection_string(connection_string)
                 container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
                 blob_client = blob_service.get_blob_client(container=container, blob=stored_blob_name)
                 blob_client.upload_blob(file_bytes, overwrite=True)
                 blob_url = blob_client.url
+                upload_success = True
                 logger.info(f"Successfully uploaded blob '{stored_blob_name}' for original file '{original_filename}' to Azure Blob Storage ({blob_url})")
             except Exception as blob_err:
                 logger.warning(f"Azure Blob upload notice: {blob_err}. Preserving local Blob URL reference.")
                 blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{stored_blob_name}"
         else:
             blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{stored_blob_name}"
+
+    print(f"[AZURE BLOB UPLOAD] Original filename: {clean_original_filename}")
+    print(f"[AZURE BLOB UPLOAD] Stored blob name: {stored_blob_name}")
+    print(f"[AZURE BLOB UPLOAD] Upload successful: {upload_success}")
+    print(f"[AZURE BLOB UPLOAD] Blob URL: {blob_url}")
 
     # Start Telemetry Pipeline Timer
     pipeline_t0 = datetime.datetime.now()

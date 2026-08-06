@@ -45,7 +45,9 @@ export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, stor
     return () => { isMounted = false; };
   }, [claimId, blobUrl]);
 
-  const displayUrl = authorizedUrl || blobUrl || `https://globalclaimsstorage.blob.core.windows.net/claims-documents/${storedBlobName || 'document.pdf'}`;
+  const apiBase = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+  const fallbackStreamUrl = claimId ? `${apiBase}/api/claims/${claimId}/document-stream` : `${apiBase}/api/claims/CLM-101/document-stream`;
+  const displayUrl = authorizedUrl || fallbackStreamUrl;
 
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 20, 200));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 20, 60));

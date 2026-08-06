@@ -15,10 +15,11 @@ def run_decision_agent(doc_res: dict, cov_res: dict, fraud_res: dict, claim_data
     if endpoint and key and key != "your_azure_openai_key":
         try:
             from openai import AzureOpenAI
+            api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-06-01")
             client = AzureOpenAI(
                 azure_endpoint=endpoint,
                 api_key=key,
-                api_version="2024-02-01"
+                api_version=api_version
             )
 
             prompt_content = f"""
@@ -35,8 +36,15 @@ Fraud Result: {json.dumps(fraud_res)}
                 ],
                 temperature=0.1
             )
-            ai_text = response.choices[0].message.content
-            parsed = json.loads(ai_text)
+            ai_text = response.choices[0].message.content or ""
+            clean_ai_text = ai_text.strip()
+            if clean_ai_text.startswith("```json"):
+                clean_ai_text = clean_ai_text[7:]
+            if clean_ai_text.startswith("```"):
+                clean_ai_text = clean_ai_text[3:]
+            if clean_ai_text.endswith("```"):
+                clean_ai_text = clean_ai_text[:-3]
+            parsed = json.loads(clean_ai_text.strip())
             return {
                 "source": "Azure OpenAI GPT-4o",
                 "recommendation": parsed.get("recommendation", "Human Review"),
@@ -45,8 +53,10 @@ Fraud Result: {json.dumps(fraud_res)}
                 "retrieved_clause": parsed.get("retrieved_clause", cov_res.get("retrieved_clause", "")),
                 "evidence": parsed.get("evidence", [])
             }
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[AZURE OPENAI ERROR] Azure OpenAI Decision Agent Exception: {e}")
+            if hasattr(e, "response") and hasattr(e.response, "text"):
+                print(f"[AZURE OPENAI ERROR RESPONSE] {e.response.text}")
 
     # Dynamic Grounded Decision Engine logic incorporating extracted fields
     amount = float(claim_data.get("amount", 0.0))
