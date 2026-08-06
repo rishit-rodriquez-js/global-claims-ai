@@ -1569,5 +1569,6 @@ Ask me about any specific claim (e.g., `CLM-1496C6`), policy coverage rules (e.g
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting GlobalClaims AI FastAPI Server on http://localhost:8000 ...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "8000"))
+    print(f"Starting GlobalClaims AI FastAPI Server on http://0.0.0.0:{port} ...")
+    uvicorn.run(app, host="0.0.0.0", port=port)
