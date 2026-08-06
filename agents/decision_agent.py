@@ -33,8 +33,7 @@ Fraud Result: {json.dumps(fraud_res)}
                 messages=[
                     {"role": "system", "content": DECISION_AGENT_PROMPT},
                     {"role": "user", "content": prompt_content}
-                ],
-                temperature=0.1
+                ]
             )
             ai_text = response.choices[0].message.content or ""
             clean_ai_text = ai_text.strip()

@@ -18,19 +18,26 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(pw_bytes, bcrypt.gensalt()).decode('utf-8')
 
 def init_db():
-    # If existing DB is using old schema without new columns, recreate tables cleanly
+    # If existing DB is using old schema without new columns, migrate or recreate tables cleanly
     try:
-        db = SessionLocal()
-        c = db.query(ClaimModel).first()
-        if c and not hasattr(c, "hospital_name"):
-            raise Exception("Schema mismatch: missing hospital_name")
-        db.close()
-    except Exception:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            res = conn.execute(text("PRAGMA table_info(documents);")).fetchall()
+            cols = [r[1] for r in res] if res else []
+            if cols and "container_name" not in cols:
+                conn.execute(text("ALTER TABLE documents ADD COLUMN container_name VARCHAR DEFAULT 'claims-documents';"))
+                conn.execute(text("ALTER TABLE documents ADD COLUMN sha256_hash VARCHAR;"))
+                conn.execute(text("ALTER TABLE documents ADD COLUMN azure_etag VARCHAR;"))
+                conn.execute(text("ALTER TABLE documents ADD COLUMN upload_time VARCHAR;"))
+                conn.execute(text("ALTER TABLE documents ADD COLUMN uploaded_by VARCHAR;"))
+                conn.execute(text("ALTER TABLE documents ADD COLUMN status VARCHAR DEFAULT 'UPLOADED';"))
+                conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION NOTICE] SQLite schema update: {e}. Recreating tables cleanly.")
         try:
-            db.close()
+            Base.metadata.drop_all(bind=engine)
         except Exception:
             pass
-        Base.metadata.drop_all(bind=engine)
 
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
