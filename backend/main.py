@@ -1081,29 +1081,38 @@ async def submit_claim(
 
         print(f"[CLAIM TRANSACTION SUCCESS] Claim '{claim_id}' created and committed to database successfully.")
 
+        created_payload = {
+            "id": claim_id,
+            "claimId": claim_id,
+            "claim_id": claim_id,
+            "status": final_status,
+            "confidence": dec_res["confidence"],
+            "fraudRisk": fraud_res.get("risk_category", "Low"),
+            "fraudScore": fraud_res.get("fraud_score", 0.0),
+            "explanation": dec_res["explanation"],
+            "retrievedClause": dec_res.get("retrieved_clause", ""),
+            "policyNumber": actual_policy_number,
+            "claimantName": actual_claimant_name,
+            "amount": actual_amount,
+            "storedBlobName": stored_blob_name,
+            "blobUrl": blob_url or f"storage/uploads/{stored_blob_name}",
+            "uploadSuccess": upload_success,
+            "timings": {
+                "ocrMs": ocr_time_ms,
+                "ragMs": rag_time_ms,
+                "llmMs": llm_time_ms,
+                "totalPipelineMs": total_pipeline_time_ms
+            }
+        }
+
         return {
             "success": True,
+            "id": claim_id,
+            "claimId": claim_id,
+            "claim_id": claim_id,
             "message": f"Claim {claim_id} created and processed successfully.",
-            "data": {
-                "claimId": claim_id,
-                "status": final_status,
-                "confidence": dec_res["confidence"],
-                "fraudRisk": fraud_res.get("risk_category", "Low"),
-                "fraudScore": fraud_res.get("fraud_score", 0.0),
-                "explanation": dec_res["explanation"],
-                "policyNumber": actual_policy_number,
-                "claimantName": actual_claimant_name,
-                "amount": actual_amount,
-                "storedBlobName": stored_blob_name,
-                "blobUrl": blob_url or f"storage/uploads/{stored_blob_name}",
-                "uploadSuccess": upload_success,
-                "timings": {
-                    "ocrMs": ocr_time_ms,
-                    "ragMs": rag_time_ms,
-                    "llmMs": llm_time_ms,
-                    "totalPipelineMs": total_pipeline_time_ms
-                }
-            }
+            "data": created_payload,
+            "claim": created_payload
         }
     except Exception as pipeline_err:
         db.rollback()

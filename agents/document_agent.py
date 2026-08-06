@@ -79,18 +79,6 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             "Unextracted (Officer Review Required)"
         )
 
-    if is_auto:
-        hospital_name = (
-            extracted_fields.get("VendorName") or 
-            (hospital_match.group(1).strip() if hospital_match else None) or 
-            "Apex Auto Collision Repair"
-        )
-        diagnosis = (
-            (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
-            "Collision Damage & Body Repair"
-        )
-        policy_type = "Auto Premium"
-        claim_type = "Collision Damage Repair"
     policy_number = (
         extracted_fields.get("PolicyNumber") or 
         (policy_match.group(1) if policy_match else None) or 
@@ -100,11 +88,11 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     hospital_name = (
         extracted_fields.get("VendorName") or 
         (hospital_match.group(1).strip() if hospital_match else None) or 
-        ("Apex Auto Collision Repair" if is_auto else "Unextracted Medical Facility")
+        "Unextracted Facility"
     )
     diagnosis = (
         (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
-        ("Collision Damage & Body Repair" if is_auto else "Unextracted Medical Condition")
+        "Unextracted Condition"
     )
     policy_type = "Auto Premium" if is_auto else "Health Standard"
     claim_type = "Collision Damage Repair" if is_auto else "Emergency Medical"

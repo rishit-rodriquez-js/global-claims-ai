@@ -100,34 +100,40 @@ export default function SubmitClaimView({ onSubmitClaimSuccess, currentUser }) {
       clearTimeout(p3);
       setProcessingStep(4);
 
-      const createdClaim = (response && response.id) ? response : (response.claim || {
-        id: response.claim_id || `CLM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        claimantName: formData.claimantName,
-        policyNumber: formData.policyNumber,
-        policyType: formData.policyType,
-        claimType: formData.claimType,
-        amount: parseFloat(formData.amount) || 1850.00,
-        coveredAmount: response.verdict === 'Approved' ? parseFloat(formData.amount) : 0.0,
+      const createdData = response?.data || response?.claim || response || {};
+      const realClaimId = response?.id || response?.claim_id || response?.claimId || createdData?.id || createdData?.claimId;
+
+      const createdClaim = {
+        id: realClaimId,
+        claimId: realClaimId,
+        claimantName: createdData.claimantName || formData.claimantName,
+        policyNumber: createdData.policyNumber || formData.policyNumber,
+        policyType: createdData.policyType || formData.policyType,
+        claimType: createdData.claimType || formData.claimType,
+        amount: createdData.amount || parseFloat(formData.amount) || 1850.00,
+        coveredAmount: createdData.coveredAmount || (createdData.status === 'APPROVED' ? parseFloat(formData.amount) : 0.0),
         incidentDate: formData.incidentDate,
         submittedDate: new Date().toISOString().split('T')[0],
-        status: response.verdict || 'Human Review',
-        confidence: response.confidence || 85.0,
-        fraudRisk: response.confidence >= 90 ? 'Low (4.2%)' : 'Medium (22.5%)',
-        fraudScore: response.confidence >= 90 ? 4.2 : 22.5,
+        status: createdData.status || response?.verdict || 'HUMAN_REVIEW',
+        confidence: createdData.confidence || response?.confidence || 85.0,
+        fraudRisk: createdData.fraudRisk || 'Low',
+        fraudScore: createdData.fraudScore || 5.0,
         documentName: selectedFile ? selectedFile.name : 'uploaded_document.pdf',
         originalFilename: selectedFile ? selectedFile.name : 'uploaded_document.pdf',
-        explanation: response.explanation || 'Processed cleanly via Azure AI Pipeline.',
-        retrievedClause: response.retrieved_clause || 'Section H-104: Emergency Medical Expenses',
-        evidence: response.evidence || ['Extracted via Azure AI Document Intelligence', 'Verified against policy'],
+        storedBlobName: createdData.storedBlobName,
+        blobUrl: createdData.blobUrl,
+        explanation: createdData.explanation || response?.explanation || 'Processed cleanly via Azure AI Pipeline.',
+        retrievedClause: createdData.retrievedClause || response?.retrieved_clause || 'Section H-104: Emergency Medical Expenses',
+        evidence: createdData.evidence || response?.evidence || ['Extracted via Azure AI Document Intelligence', 'Verified against policy'],
         timeline: [
           { step: 'Upload', status: 'completed', timestamp: 'Just now', detail: `Uploaded ${selectedFile ? selectedFile.name : 'document.pdf'} to Azure Blob Storage` },
           { step: 'OCR', status: 'completed', timestamp: 'Just now', detail: 'Azure AI Document Intelligence extracted billing matrix' },
           { step: 'Policy Match', status: 'completed', timestamp: 'Just now', detail: 'Azure AI Search RAG retrieved matching policy clause' },
           { step: 'Fraud Check', status: 'completed', timestamp: 'Just now', detail: 'Fraud Risk Scoring Agent performed anomaly check' },
           { step: 'Reasoning', status: 'completed', timestamp: 'Just now', detail: 'Azure OpenAI GPT-5.6-sol evaluated policy eligibility' },
-          { step: 'Decision', status: 'completed', timestamp: 'Just now', detail: `Final Recommendation: ${response.verdict || 'Human Review'}` }
+          { step: 'Decision', status: 'completed', timestamp: 'Just now', detail: `Final Recommendation: ${createdData.status || 'HUMAN_REVIEW'}` }
         ]
-      });
+      };
 
       setTimeout(() => {
         setIsProcessing(false);
