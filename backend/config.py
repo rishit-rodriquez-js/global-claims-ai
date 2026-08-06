@@ -21,6 +21,7 @@ class Settings:
     AZURE_STORAGE_CONNECTION_STRING: str = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
     AZURE_STORAGE_CONTAINER: str = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
     AZURE_STORAGE_ACCOUNT: str = os.getenv("AZURE_STORAGE_ACCOUNT", "globalclaimsstorage")
+    AZURE_STORAGE_BLOB_ENDPOINT: str = os.getenv("AZURE_STORAGE_BLOB_ENDPOINT", "https://globalclaimsstorage.blob.core.windows.net/")
 
     # Azure AI Services
     AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: str = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "")
