@@ -7,6 +7,7 @@ import re
 import jwt
 import bcrypt
 import logging
+import hashlib
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status, Request
 from fastapi.responses import JSONResponse
