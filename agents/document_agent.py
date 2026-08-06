@@ -46,9 +46,9 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     amount_match = re.search(r'(?:Total|Amount|Balance|Due)[:\s$]+([\d,]+\.?\d*)', raw_text, re.IGNORECASE)
     diagnosis_match = re.search(r'(?:Diagnosis|Reason|Condition|Damage)[:\s]+([A-Za-z0-9\s.,]+)', raw_text, re.IGNORECASE)
 
-    # Compute a deterministic seed from file contents & name to guarantee unique outputs for every distinct upload
-    # Compute SHA256 file hash for transaction verification
-    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    # Compute SHA256 file hash and deterministic integer for upload verification
+    file_hash = hashlib.sha256(file_bytes).hexdigest() if file_bytes else hashlib.sha256(file_name.encode('utf-8')).hexdigest()
+    hash_num = int(file_hash[:8], 16)
 
     # Filename or content semantic detection
     is_auto = any(term in file_name.lower() or term in raw_text.lower() for term in ["auto", "collision", "vehicle", "repair", "car"])

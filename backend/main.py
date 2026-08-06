@@ -761,21 +761,24 @@ async def submit_claim(
         original_filename = file.filename
         clean_original_filename = sanitize_filename(original_filename)
 
+        container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
+        account_name = os.getenv("AZURE_STORAGE_ACCOUNT", "globalclaimsstorage")
+        print(f"[AZURE BLOB UPLOAD] Target Account: {account_name} | Container: {container} | Blob: {stored_blob_name}")
+
         connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         if connection_string and "your_azure_storage" not in connection_string.lower():
             try:
                 blob_service = BlobServiceClient.from_connection_string(connection_string)
-                container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
                 blob_client = blob_service.get_blob_client(container=container, blob=stored_blob_name)
                 blob_client.upload_blob(file_bytes, overwrite=True)
                 blob_url = blob_client.url
-                upload_success = True
-                logger.info(f"Successfully uploaded blob '{stored_blob_name}' for original file '{original_filename}' to Azure Blob Storage ({blob_url})")
+                upload_success = blob_client.exists()
+                logger.info(f"Successfully uploaded blob '{stored_blob_name}' to Azure Storage ({container}/{stored_blob_name}) | Verified Exists: {upload_success}")
             except Exception as blob_err:
                 logger.warning(f"Azure Blob upload notice: {blob_err}. Preserving local Blob URL reference.")
-                blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{stored_blob_name}"
+                blob_url = f"https://{account_name}.blob.core.windows.net/{container}/{stored_blob_name}"
         else:
-            blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{stored_blob_name}"
+            blob_url = f"https://{account_name}.blob.core.windows.net/{container}/{stored_blob_name}"
 
     print(f"[AZURE BLOB UPLOAD] Original filename: {clean_original_filename}")
     print(f"[AZURE BLOB UPLOAD] Stored blob name: {stored_blob_name}")
