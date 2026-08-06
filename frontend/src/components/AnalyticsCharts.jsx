@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart2, 
   PieChart as PieIcon, 
@@ -25,12 +25,25 @@ import {
   YAxis 
 } from 'recharts';
 import { motion } from 'framer-motion';
+import { fetchAnalyticsDataApi } from '../services/api.js';
 
 export default function AnalyticsCharts({ claims = [] }) {
-  const totalClaims = claims.length || 1;
-  const approved = claims.filter(c => c.status === 'Approved').length;
-  const review = claims.filter(c => c.status === 'Human Review').length;
-  const rejected = claims.filter(c => c.status === 'Rejected').length;
+  const [liveAnalytics, setLiveAnalytics] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAnalytics() {
+      const data = await fetchAnalyticsDataApi();
+      if (isMounted && data) setLiveAnalytics(data);
+    }
+    loadAnalytics();
+    return () => { isMounted = false; };
+  }, [claims]);
+
+  const totalClaims = liveAnalytics?.totalClaims || claims.length || 1;
+  const approved = claims.filter(c => c.status === 'Approved' || c.status === 'APPROVED').length;
+  const review = claims.filter(c => c.status === 'Human Review' || c.status === 'IN_REVIEW' || c.status === 'NEW').length;
+  const rejected = claims.filter(c => c.status === 'Rejected' || c.status === 'REJECTED').length;
 
   const lowRisk = claims.filter(c => (c.fraudScore || 0) < 15).length;
   const medRisk = claims.filter(c => (c.fraudScore || 0) >= 15 && (c.fraudScore || 0) < 30).length;

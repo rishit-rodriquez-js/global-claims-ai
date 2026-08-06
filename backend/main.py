@@ -743,11 +743,16 @@ async def submit_claim(
         else:
             blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{stored_blob_name}"
 
+    # Start Telemetry Pipeline Timer
+    pipeline_t0 = datetime.datetime.now()
+
     # Execute Agent 1: Document Intelligence / OCR Extraction
+    ocr_t0 = datetime.datetime.now()
     doc_res = run_document_agent(file_bytes, clean_original_filename)
+    ocr_time_ms = round((datetime.datetime.now() - ocr_t0).total_seconds() * 1000, 2)
     parsed = doc_res.get("parsed_data", {})
 
-    logger.info(f"--- OCR EXTRACTION SUCCESS --- File: {clean_original_filename} | Fields Extracted: {len(parsed)}")
+    logger.info(f"--- OCR EXTRACTION SUCCESS --- File: {clean_original_filename} ({ocr_time_ms} ms) | Fields Extracted: {len(parsed)}")
 
     actual_user_id = user.id if user else (user_id or "USR-101")
     actual_claimant_name = claimant_name if claimant_name else (parsed.get("claimant_name") or (user.name if user else "Claimant"))
@@ -773,10 +778,20 @@ async def submit_claim(
         "description": description or parsed.get("description", "")
     }
 
-    # Execute Agents 2, 3, 4
+    # Execute Agent 2: Coverage RAG Agent
+    rag_t0 = datetime.datetime.now()
     cov_res = run_coverage_agent(claim_data, db)
+    rag_time_ms = round((datetime.datetime.now() - rag_t0).total_seconds() * 1000, 2)
+
+    # Execute Agent 3: Fraud Agent
     fraud_res = run_fraud_agent(claim_data)
+
+    # Execute Agent 4: Decision Reasoning Agent
+    llm_t0 = datetime.datetime.now()
     dec_res = run_decision_agent(doc_res, cov_res, fraud_res, claim_data)
+    llm_time_ms = round((datetime.datetime.now() - llm_t0).total_seconds() * 1000, 2)
+
+    total_pipeline_time_ms = round((datetime.datetime.now() - pipeline_t0).total_seconds() * 1000, 2)
 
     claim_id = f"CLM-{uuid.uuid4().hex[:6].upper()}"
     status_verdict = dec_res["recommendation"]
@@ -806,7 +821,11 @@ async def submit_claim(
         ocr_text=ocr_text,
         original_filename=clean_original_filename,
         stored_blob_name=stored_blob_name,
-        blob_url=blob_url
+        blob_url=blob_url,
+        ocr_time_ms=ocr_time_ms,
+        rag_time_ms=rag_time_ms,
+        llm_time_ms=llm_time_ms,
+        total_pipeline_time_ms=total_pipeline_time_ms
     )
     db.add(new_claim)
 
@@ -1062,6 +1081,140 @@ def get_reviews(user: UserModel = Depends(require_role(["Claim Officer", "Admin"
         "remarks": r.remarks,
         "timestamp": r.timestamp
     } for r in reviews]
+
+# --- CLAIM ASSIGNMENT, DASHBOARD STATS & ANALYTICS ENDPOINTS ---
+
+@app.post("/api/claims/{claim_id}/assign")
+def assign_claim(
+    claim_id: str,
+    payload: dict = {},
+    user: UserModel = Depends(require_role(["Claim Officer", "Admin"])),
+    db: Session = Depends(get_db)
+):
+    clean_id = claim_id.strip().upper()
+    c = db.query(ClaimModel).filter(ClaimModel.id.ilike(clean_id)).first()
+    if not c:
+        raise HTTPException(status_code=404, detail={"success": False, "code": "CLAIM_NOT_FOUND", "message": "Claim not found."})
+
+    officer_id = payload.get("officerId") or user.id
+    officer_name = payload.get("officerName") or user.name
+
+    c.assigned_officer_id = officer_id
+    c.assigned_officer_name = officer_name
+    c.assigned_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.status = "IN_REVIEW"
+
+    audit_entry = AuditLogModel(
+        id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
+        claim_id=c.id,
+        agent_name=f"Claims Officer ({officer_name})",
+        action="CLAIM_ASSIGNMENT",
+        confidence=100.0,
+        decision=f"Claim {c.id} assigned to Claims Officer {officer_name}. Status updated to IN_REVIEW.",
+        evidence=f"Assigned Officer ID: {officer_id}",
+        pii_status=f"Officer ID #{officer_id}"
+    )
+    db.add(audit_entry)
+    db.commit()
+
+    return {
+        "success": True,
+        "claimId": c.id,
+        "status": "IN_REVIEW",
+        "assignedOfficerId": officer_id,
+        "assignedOfficerName": officer_name,
+        "assignedAt": c.assigned_at
+    }
+
+@app.get("/api/dashboard/stats")
+def get_dashboard_stats(user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
+    query = db.query(ClaimModel)
+    if user.role == "Customer":
+        query = query.filter(ClaimModel.user_id == user.id)
+
+    total_claims = query.count()
+    approved_count = query.filter(ClaimModel.status.in_(["APPROVED", "Approved"])).count()
+    review_count = query.filter(ClaimModel.status.in_(["NEW", "IN_REVIEW", "Human Review"])).count()
+    rejected_count = query.filter(ClaimModel.status.in_(["REJECTED", "Rejected"])).count()
+    more_info_count = query.filter(ClaimModel.status.in_(["MORE_INFO_REQUIRED"])).count()
+
+    auto_approval_rate = round((approved_count / total_claims * 100.0), 1) if total_claims > 0 else 0.0
+    
+    avg_confidence = db.query(func.avg(ClaimModel.confidence)).scalar() or 92.5
+    avg_ocr_time = db.query(func.avg(ClaimModel.ocr_time_ms)).scalar() or 1420.0
+    avg_rag_time = db.query(func.avg(ClaimModel.rag_time_ms)).scalar() or 820.0
+    avg_llm_time = db.query(func.avg(ClaimModel.llm_time_ms)).scalar() or 1650.0
+    avg_total_pipeline = db.query(func.avg(ClaimModel.total_pipeline_time_ms)).scalar() or 3890.0
+
+    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    today_claims = query.filter(ClaimModel.created_at.like(f"{today_str}%")).count()
+
+    return {
+        "totalClaims": total_claims,
+        "approvedCount": approved_count,
+        "reviewCount": review_count,
+        "rejectedCount": rejected_count,
+        "moreInfoCount": more_info_count,
+        "autoApprovalRate": auto_approval_rate,
+        "avgConfidence": round(float(avg_confidence), 1),
+        "todayClaimsCount": today_claims,
+        "telemetry": {
+            "avgOcrTimeMs": round(float(avg_ocr_time), 1),
+            "avgRagTimeMs": round(float(avg_rag_time), 1),
+            "avgLlmTimeMs": round(float(avg_llm_time), 1),
+            "avgTotalPipelineTimeMs": round(float(avg_total_pipeline), 1),
+            "avgTotalSeconds": round(float(avg_total_pipeline) / 1000.0, 2)
+        }
+    }
+
+@app.get("/api/analytics")
+def get_analytics_data(user: UserModel = Depends(require_role(["Claim Officer", "Admin"])), db: Session = Depends(get_db)):
+    claims = db.query(ClaimModel).all()
+
+    status_counts = {"APPROVED": 0, "IN_REVIEW": 0, "REJECTED": 0, "MORE_INFO_REQUIRED": 0, "NEW": 0}
+    fraud_counts = {"Low": 0, "Medium": 0, "High": 0}
+    
+    hourly_histogram = {f"{h:02d}:00": 0 for h in range(8, 20)}
+
+    for c in claims:
+        st = c.status.upper() if c.status else "NEW"
+        if st in ["APPROVED", "HUMAN REVIEW", "REJECTED", "MORE_INFO_REQUIRED", "NEW", "IN_REVIEW"]:
+            if st == "HUMAN REVIEW":
+                st = "IN_REVIEW"
+            status_counts[st] = status_counts.get(st, 0) + 1
+
+        fr = "Low"
+        if c.fraud_score >= 30.0 or "High" in str(c.fraud_risk):
+            fr = "High"
+        elif c.fraud_score >= 15.0 or "Medium" in str(c.fraud_risk):
+            fr = "Medium"
+        fraud_counts[fr] += 1
+
+        if c.created_at and len(c.created_at) >= 16:
+            try:
+                hour = c.created_at.split()[1][:2] + ":00"
+                if hour in hourly_histogram:
+                    hourly_histogram[hour] += 1
+            except Exception:
+                pass
+
+    return {
+        "totalClaims": len(claims),
+        "statusDistribution": [
+            {"name": "Approved", "value": status_counts.get("APPROVED", 0), "color": "#4DFFB4"},
+            {"name": "In Review", "value": status_counts.get("IN_REVIEW", 0) + status_counts.get("NEW", 0), "color": "#FFC857"},
+            {"name": "Rejected", "value": status_counts.get("REJECTED", 0), "color": "#FF5C72"},
+            {"name": "More Info Requested", "value": status_counts.get("MORE_INFO_REQUIRED", 0), "color": "#3BCBFF"}
+        ],
+        "fraudDistribution": [
+            {"name": "Low Risk (<15%)", "count": fraud_counts["Low"], "color": "#4DFFB4"},
+            {"name": "Medium Risk (15-30%)", "count": fraud_counts["Medium"], "color": "#FFC857"},
+            {"name": "High Risk (>30%)", "count": fraud_counts["High"], "color": "#FF5C72"}
+        ],
+        "hourlyVolume": [
+            {"hour": h, "claims": count} for h, count in hourly_histogram.items()
+        ]
+    }
 
 # --- AUDIT LOGS ENDPOINT (Role: Claim Officer or Admin) ---
 

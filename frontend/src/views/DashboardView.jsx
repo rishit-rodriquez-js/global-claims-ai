@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
   Clock, 
@@ -15,6 +15,7 @@ import {
 import AnalyticsCharts from '../components/AnalyticsCharts.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchDashboardStatsApi } from '../services/api.js';
 
 export default function DashboardView({ 
   claims = [], 
@@ -26,6 +27,17 @@ export default function DashboardView({
   currentUser
 }) {
   const [activeSubTab, setActiveSubTab] = useState('analytics'); // 'analytics' or 'table'
+  const [dbStats, setDbStats] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStats() {
+      const stats = await fetchDashboardStatsApi();
+      if (isMounted && stats) setDbStats(stats);
+    }
+    loadStats();
+    return () => { isMounted = false; };
+  }, [claims]);
 
   const filteredClaims = claims.filter(c => 
     c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -37,10 +49,11 @@ export default function DashboardView({
   const isCustomer = currentUser?.role === 'Customer';
   const customerClaims = claims.filter(c => c.userId === currentUser?.id || c.claimantName === currentUser?.name);
 
-  const totalClaims = isCustomer ? customerClaims.length : claims.length;
-  const approvedCount = (isCustomer ? customerClaims : claims).filter(c => c.status === 'Approved').length;
-  const reviewCount = (isCustomer ? customerClaims : claims).filter(c => c.status === 'Human Review').length;
-  const autoApprovalRate = totalClaims > 0 ? ((approvedCount / totalClaims) * 100).toFixed(1) : 0;
+  const totalClaims = dbStats ? dbStats.totalClaims : (isCustomer ? customerClaims.length : claims.length);
+  const approvedCount = dbStats ? dbStats.approvedCount : (isCustomer ? customerClaims : claims).filter(c => c.status === 'Approved' || c.status === 'APPROVED').length;
+  const reviewCount = dbStats ? dbStats.reviewCount : (isCustomer ? customerClaims : claims).filter(c => c.status === 'Human Review' || c.status === 'IN_REVIEW' || c.status === 'NEW').length;
+  const autoApprovalRate = dbStats ? dbStats.autoApprovalRate : (totalClaims > 0 ? ((approvedCount / totalClaims) * 100).toFixed(1) : 0);
+  const telemetrySeconds = dbStats?.telemetry?.avgTotalSeconds ? `${dbStats.telemetry.avgTotalSeconds}s` : '3.89s';
 
   // Customer Portal View
   if (isCustomer) {

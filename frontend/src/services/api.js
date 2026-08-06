@@ -208,6 +208,44 @@ export async function fetchClaimDocumentUrl(claimId) {
   return `${API_BASE_URL}/claims/${claimId}/document-stream`;
 }
 
+export async function fetchDashboardStatsApi() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('API Error (fetchDashboardStatsApi):', error);
+    return null;
+  }
+}
+
+export async function fetchAnalyticsDataApi() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/analytics`, {
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('API Error (fetchAnalyticsDataApi):', error);
+    return null;
+  }
+}
+
+export async function assignClaimApi(claimId, officerId, officerName) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/claims/${claimId}/assign`, {
+      method: 'POST',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ officerId, officerName })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('API Error (assignClaimApi):', error);
+    return null;
+  }
+}
+
 /**
  * Submit new claim with file upload to FastAPI -> Azure Blob -> 4-Agent Pipeline
  */

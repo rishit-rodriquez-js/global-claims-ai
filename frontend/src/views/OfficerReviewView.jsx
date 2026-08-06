@@ -11,23 +11,24 @@ import {
   AlertCircle,
   Command
 } from 'lucide-react';
-import { reviewClaimApi } from '../services/api.js';
+import { reviewClaimApi, assignClaimApi } from '../services/api.js';
 import DocumentExtractionReport from '../components/DocumentExtractionReport.jsx';
 import EmbeddedPdfViewer from '../components/EmbeddedPdfViewer.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, currentUser }) {
-  const pendingClaims = claims.filter(c => c.status === 'Human Review');
+  const pendingClaims = claims.filter(c => c.status === 'Human Review' || c.status === 'NEW' || c.status === 'IN_REVIEW');
   const [selectedClaimId, setSelectedClaimId] = useState(pendingClaims[0]?.id || claims[0]?.id);
   const [officerNotes, setOfficerNotes] = useState('');
   const [statusMessage, setStatusMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   // Auto-sync selected claim when claims list updates or new claim is uploaded
   useEffect(() => {
-    const newestPending = claims.find(c => c.status === 'Human Review') || claims[0];
+    const newestPending = claims.find(c => c.status === 'Human Review' || c.status === 'NEW' || c.status === 'IN_REVIEW') || claims[0];
     if (newestPending && (!selectedClaimId || !claims.some(c => c.id === selectedClaimId))) {
       setSelectedClaimId(newestPending.id);
     }
@@ -35,11 +36,25 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
 
   const activeClaim = claims.find(c => c.id === selectedClaimId) || claims[0];
 
+  const handleAssignToMe = async () => {
+    if (!activeClaim) return;
+    setIsAssigning(true);
+    try {
+      await assignClaimApi(activeClaim.id, currentUser?.id || 'USR-801', currentUser?.name || 'Claims Officer');
+      onUpdateClaimStatus(activeClaim.id, 'IN_REVIEW', 'Assigned to officer.');
+      setStatusMessage(`Claim ${activeClaim.id} assigned to ${currentUser?.name || 'Claims Officer'}. Status updated to IN_REVIEW.`);
+    } catch (err) {
+      setErrorMessage("Failed to assign claim.");
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   const handleDecision = async (action) => {
     if (!activeClaim) return;
     let newStatus = 'Approved';
     if (action === 'REJECT') newStatus = 'Rejected';
-    if (action === 'REQUEST_INFO') newStatus = 'Human Review';
+    if (action === 'REQUEST_INFO') newStatus = 'MORE_INFO_REQUIRED';
 
     setIsSubmitting(true);
     setErrorMessage(null);
