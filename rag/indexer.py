@@ -32,8 +32,30 @@ def index_policy_documents():
 
     if search_endpoint and search_key and "your_search" not in search_key.lower():
         try:
+            from azure.search.documents.indexes import SearchIndexClient
+            from azure.search.documents.indexes.models import SearchIndex, SimpleField, SearchableField
             from azure.search.documents import SearchClient
             from azure.core.credentials import AzureKeyCredential
+
+            index_client = SearchIndexClient(search_endpoint, AzureKeyCredential(search_key))
+            
+            # Auto-create Azure Search index if it does not exist
+            try:
+                index_client.get_index(search_index)
+            except Exception:
+                print(f"[RAG INDEXER] Creating index '{search_index}' on Azure AI Search...")
+                fields = [
+                    SimpleField(name="id", type="Edm.String", key=True),
+                    SearchableField(name="policy_type", type="Edm.String", filterable=True),
+                    SearchableField(name="section_code", type="Edm.String", filterable=True),
+                    SearchableField(name="title", type="Edm.String"),
+                    SearchableField(name="content", type="Edm.String"),
+                    SimpleField(name="coverage_limit", type="Edm.Double"),
+                    SimpleField(name="deductible", type="Edm.Double")
+                ]
+                index = SearchIndex(name=search_index, fields=fields)
+                index_client.create_index(index)
+                print(f"[RAG INDEXER SUCCESS] Created Azure AI Search index '{search_index}'.")
 
             search_client = SearchClient(search_endpoint, search_index, AzureKeyCredential(search_key))
             result = search_client.upload_documents(documents=documents)
