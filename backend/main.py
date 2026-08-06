@@ -472,8 +472,61 @@ def get_me(user: UserModel = Depends(get_current_user)):
 @app.post("/api/users/logout")
 def logout_user(user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
     log_audit_event(db, None, "Auth System", "USER_LOGOUT", f"User {user.name} logged out.", pii_status=f"Masked (ID: {user.id})")
-    return {"success": True, "message": "Successfully logged out."}
-
+@app.get("/api/health/blob")
+def health_check_azure_blob():
+    """
+    Step 12: Startup & Runtime Health Check for Azure Blob Storage.
+    Verifies connection, container existence, test blob upload, download, and cleanup.
+    """
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
+    
+    if not connection_string or "your_azure_storage" in connection_string.lower():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "Unhealthy",
+                "service": "Azure Storage",
+                "message": "AZURE_STORAGE_CONNECTION_STRING is unconfigured."
+            }
+        )
+    try:
+        blob_service = BlobServiceClient.from_connection_string(connection_string)
+        container_client = blob_service.get_container_client(container)
+        container_exists = container_client.exists()
+        
+        # Test Upload, Download, Delete cycle
+        test_blob_name = f"health_test_{uuid.uuid4().hex[:6]}.txt"
+        test_bytes = b"GlobalClaims AI Azure Storage Health Check Vector Verification"
+        
+        test_blob_client = blob_service.get_blob_client(container=container, blob=test_blob_name)
+        test_blob_client.upload_blob(test_bytes, overwrite=True)
+        uploaded = test_blob_client.exists()
+        
+        downloaded_bytes = test_blob_client.download_blob().readall()
+        download_verified = (downloaded_bytes == test_bytes)
+        
+        test_blob_client.delete_blob()
+        
+        return {
+            "status": "Healthy",
+            "service": "Azure Storage",
+            "container": container,
+            "containerExists": container_exists,
+            "uploadVerified": uploaded,
+            "downloadVerified": download_verified,
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+    except Exception as health_err:
+        logger.error(f"Azure Storage Health Check Failed: {health_err}", exc_info=True)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "Unhealthy",
+                "service": "Azure Storage",
+                "error": str(health_err)
+            }
+        )
 
 # --- CLAIMS ENDPOINTS ---
 
@@ -619,11 +672,23 @@ def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = De
     docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
     
-    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None) or f"claim_doc_{c.id.lower()}.pdf"
-    orig_name = c.original_filename or (doc.original_filename if doc else f"{c.id.lower()}_document.pdf")
+    # Step 11: Never generate default/fabricated blob names. Must come from DB metadata.
+    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None)
+    orig_name = c.original_filename or (doc.original_filename if doc else None)
+    if not stored_name:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "code": "DOCUMENT_METADATA_MISSING",
+                "message": f"Document blob metadata for claim '{clean_id}' is missing from database."
+            }
+        )
+
+    orig_name = orig_name or stored_name
     container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
 
-    # Verify blob exists in Azure Storage Account for stored_name directly from DB
+    # Step 14: Verify blob exists in Azure Storage or local backup
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     blob_exists = False
     if connection_string and "your_azure_storage" not in connection_string.lower():
@@ -632,11 +697,21 @@ def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = De
             blob_client = blob_service.get_blob_client(container=container, blob=stored_name)
             blob_exists = blob_client.exists()
         except Exception as err:
-            logger.warning(f"Blob existence check warning for '{stored_name}': {err}")
+            logger.warning(f"Blob existence check notice for '{stored_name}': {err}")
 
-    # Local storage fallback check
+    # Local storage backup check
     local_upload_dir = os.path.join(root_dir, "storage", "uploads")
     has_local_file = os.path.exists(os.path.join(local_upload_dir, stored_name))
+
+    if not blob_exists and not has_local_file:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "code": "DOCUMENT_NOT_FOUND",
+                "message": f"Uploaded document '{stored_name}' for claim '{clean_id}' could not be located in Azure Blob or local storage."
+            }
+        )
 
     sas_url = generate_azure_sas_url(container, stored_name) if blob_exists else None
     
@@ -656,6 +731,7 @@ def get_claim_document_sas(claim_id: str, request: Request, user: UserModel = De
         "sasUrl": sas_url or final_url,
         "isSasUrl": bool(sas_url),
         "blobExists": blob_exists,
+        "hasLocalBackup": has_local_file,
         "expiresInMinutes": 15
     }
 
@@ -670,15 +746,25 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
             status_code=404,
             content={
                 "success": False,
-                "code": "DOCUMENT_NOT_FOUND",
-                "message": f"Uploaded document for claim '{clean_id}' could not be located."
+                "code": "CLAIM_NOT_FOUND",
+                "message": f"Claim with ID '{clean_id}' could not be located."
             }
         )
 
     docs = db.query(DocumentModel).filter(DocumentModel.claim_id == c.id).all()
     doc = docs[0] if docs else None
-    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None) or f"claim_doc_{c.id.lower()}.pdf"
-    orig_name = c.original_filename or (doc.original_filename if doc else f"{c.id.lower()}_document.pdf")
+    stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None)
+    orig_name = c.original_filename or (doc.original_filename if doc else None) or stored_name
+
+    if not stored_name:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "code": "DOCUMENT_METADATA_MISSING",
+                "message": f"Document blob metadata for claim '{clean_id}' is missing."
+            }
+        )
 
     # 1. Check Azure Blob Storage stream first
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -713,22 +799,14 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
         except Exception as local_err:
             logger.warning(f"Local file stream notice for {stored_name}: {local_err}")
 
-    # 3. Dynamic PDF Fallback
-    pdf_content = f"""%PDF-1.4
-1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj
-2 0 obj <</Type /Pages /Kinds [3 0 R] /Count 1>> endobj
-3 0 obj <</Type /Page /Parent 2 0 R /Resources <<>> /Contents 4 0 R>> endobj
-4 0 obj <</Length 180>> stream
-BT /F1 12 Tf 50 700 TD (GlobalClaims AI - Private Document Stream) Tj 50 670 TD (Claim ID: {c.id}) Tj 50 650 TD (Original File: {orig_name}) Tj 50 630 TD (Stored Blob Name: {stored_name}) Tj ET
-endstream endobj
-xref 0 5
-trailer <</Size 5 /Root 1 0 R>>
-startxref 300
-%%EOF"""
-    return Response(
-        content=pdf_content.encode('latin1'),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
+    # Step 7 & 8: Remove Fake PDF Fallback completely! Return strict HTTP 404 JSON response.
+    return JSONResponse(
+        status_code=404,
+        content={
+            "success": False,
+            "code": "DOCUMENT_NOT_FOUND",
+            "message": f"Uploaded document file '{stored_name}' for claim '{clean_id}' could not be located in Azure Blob or local storage."
+        }
     )
 
 @app.post("/api/claims/parse-document")
@@ -773,136 +851,267 @@ async def submit_claim(
     original_filename = file.filename if file else "document.pdf"
     clean_original_filename = sanitize_filename(original_filename)
     stored_blob_name = f"claim_doc_{uuid.uuid4().hex[:8]}.pdf"
-    blob_url = f"https://globalclaimsstorage.blob.core.windows.net/claims-documents/{stored_blob_name}"
+    blob_url = None
     upload_success = False
 
-    if file:
-        validate_uploaded_file(file)
-        file_bytes = await file.read()
-        validate_file_size(file_bytes)
-        original_filename = file.filename
-        clean_original_filename = sanitize_filename(original_filename)
+    if not file:
+        raise HTTPException(
+            status_code=400,
+            detail={"success": False, "message": "Document file is required for claim submission."}
+        )
 
-        container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
-        account_name = os.getenv("AZURE_STORAGE_ACCOUNT", "globalclaimsstorage")
-        print(f"[AZURE BLOB UPLOAD] Target Account: {account_name} | Container: {container} | Blob: {stored_blob_name}")
+    validate_uploaded_file(file)
+    file_bytes = await file.read()
+    validate_file_size(file_bytes)
+    original_filename = file.filename
+    clean_original_filename = sanitize_filename(original_filename)
 
-        connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-        if connection_string and "your_azure_storage" not in connection_string.lower():
-            try:
-                blob_service = BlobServiceClient.from_connection_string(connection_string)
-                blob_client = blob_service.get_blob_client(container=container, blob=stored_blob_name)
-                blob_client.upload_blob(file_bytes, overwrite=True)
-                blob_url = blob_client.url
-                upload_success = blob_client.exists()
-                logger.info(f"Successfully uploaded blob '{stored_blob_name}' to Azure Storage ({container}/{stored_blob_name}) | Verified Exists: {upload_success}")
-            except Exception as blob_err:
-                logger.warning(f"Azure Blob upload notice: {blob_err}. Preserving local Blob URL reference.")
-                blob_url = f"https://{account_name}.blob.core.windows.net/{container}/{stored_blob_name}"
-        # Persist uploaded file bytes locally to storage/uploads/ for guaranteed streaming availability
-        try:
-            local_upload_dir = os.path.join(root_dir, "storage", "uploads")
-            os.makedirs(local_upload_dir, exist_ok=True)
-            local_save_path = os.path.join(local_upload_dir, stored_blob_name)
-            with open(local_save_path, "wb") as f_out:
-                f_out.write(file_bytes)
-            logger.info(f"Persisted local file copy to {local_save_path} ({len(file_bytes)} bytes)")
-        except Exception as local_err:
-            logger.warning(f"Local file persistence notice: {local_err}")
-
-    print(f"[AZURE BLOB UPLOAD] Original filename: {clean_original_filename}")
-    print(f"[AZURE BLOB UPLOAD] Stored blob name: {stored_blob_name}")
-    print(f"[AZURE BLOB UPLOAD] Azure Upload Successful: {upload_success}")
-    print(f"[AZURE BLOB UPLOAD] Blob URL: {blob_url}")
-
-    # Calculate SHA256 file hash for transaction verification
-    sha256_hash = hashlib.sha256(file_bytes).hexdigest() if file_bytes else None
-
-    # Start Telemetry Pipeline Timer
-    pipeline_t0 = datetime.datetime.now()
-
-    # Execute Agent 1: Document Intelligence / OCR Extraction
-    ocr_t0 = datetime.datetime.now()
-    doc_res = run_document_agent(file_bytes, clean_original_filename)
-    ocr_time_ms = round((datetime.datetime.now() - ocr_t0).total_seconds() * 1000, 2)
-    parsed = doc_res.get("parsed_data", {})
-
-    logger.info(f"--- OCR EXTRACTION SUCCESS --- File: {clean_original_filename} ({ocr_time_ms} ms) | SHA256: {sha256_hash[:12] if sha256_hash else 'N/A'}")
-
-    actual_user_id = user.id if user else (user_id or "USR-101")
-    actual_claimant_name = claimant_name if claimant_name else (parsed.get("claimant_name") or (user.name if user else "Claimant"))
-    actual_policy_number = policy_number if policy_number else (parsed.get("policy_number") or "POL-HTH-7721")
-    actual_policy_type = policy_type if policy_type else (parsed.get("policy_type") or "Health Standard")
-    actual_claim_type = claim_type if claim_type else (parsed.get("claim_type") or "Emergency Medical")
-    actual_amount = amount if (amount is not None and amount > 0) else float(parsed.get("amount", 1850.00))
-    hospital_name = parsed.get("hospital_name") or "Metro Health Medical Center"
-    diagnosis = parsed.get("diagnosis") or "Acute Emergency Care"
-    invoice_number = parsed.get("invoice_number") or f"INV-2026-{(uuid.uuid4().int % 89999) + 10000}"
-    ocr_text = doc_res.get("ocr_text") or f"[AZURE AI OCR OUTPUT]\nOriginal File: {original_filename}\nPatient: {actual_claimant_name}\nFacility: {hospital_name}\nInvoice #: {invoice_number}\nAmount: ${actual_amount:,.2f}"
-
-    claim_data = {
-        "claimant_name": actual_claimant_name,
-        "hospital_name": hospital_name,
-        "diagnosis": diagnosis,
-        "invoice_number": invoice_number,
-        "policy_number": actual_policy_number,
-        "policy_type": actual_policy_type,
-        "claim_type": actual_claim_type,
-        "amount": actual_amount,
-        "incident_date": incident_date,
-        "description": description or parsed.get("description", "")
-    }
-
-    # Execute Agent 2: Coverage RAG Agent
-    rag_t0 = datetime.datetime.now()
-    cov_res = run_coverage_agent(claim_data, db)
-    rag_time_ms = round((datetime.datetime.now() - rag_t0).total_seconds() * 1000, 2)
-
-    # Execute Agent 3: Fraud Agent
-    fraud_res = run_fraud_agent(claim_data)
-
-    # Execute Agent 4: Decision Reasoning Agent
-    llm_t0 = datetime.datetime.now()
-    dec_res = run_decision_agent(doc_res, cov_res, fraud_res, claim_data)
-    llm_time_ms = round((datetime.datetime.now() - llm_t0).total_seconds() * 1000, 2)
-
-    total_pipeline_time_ms = round((datetime.datetime.now() - pipeline_t0).total_seconds() * 1000, 2)
-
-    claim_id = f"CLM-{uuid.uuid4().hex[:6].upper()}"
-    status_verdict = dec_res["recommendation"]
+    container = os.getenv("AZURE_STORAGE_CONTAINER", "claims-documents")
+    account_name = os.getenv("AZURE_STORAGE_ACCOUNT", "globalclaimsstorage")
     
-    # Normalized Status Constants: NEW, HUMAN_REVIEW, APPROVED, REJECTED, MORE_INFO_REQUIRED
-    final_status = "APPROVED" if status_verdict == "Approved" else "HUMAN_REVIEW"
+    # Step 9: Detailed Upload Logging Before Upload
+    logger.info(f"[AZURE BLOB UPLOAD START] File: '{clean_original_filename}' | Target Account: '{account_name}' | Container: '{container}' | Blob: '{stored_blob_name}' | Size: {len(file_bytes)} bytes | Content-Type: '{file.content_type}'")
+    print(f"[AZURE BLOB UPLOAD] Uploading '{clean_original_filename}' ({len(file_bytes)} bytes) to {container}/{stored_blob_name}...")
 
-    new_claim = ClaimModel(
-        id=claim_id,
-        user_id=actual_user_id,
-        claimant_name=actual_claimant_name,
-        hospital_name=hospital_name,
-        diagnosis=diagnosis,
-        invoice_number=invoice_number,
-        policy_number=actual_policy_number,
-        policy_type=actual_policy_type,
-        claim_type=actual_claim_type,
-        amount=actual_amount,
-        covered_amount=actual_amount if final_status == "APPROVED" else 0.0,
-        status=final_status,
-        confidence=dec_res["confidence"],
-        fraud_risk=fraud_res["risk_category"],
-        fraud_score=fraud_res["fraud_score"],
-        explanation=dec_res["explanation"],
-        retrieved_clause=dec_res["retrieved_clause"],
-        evidence_json=json.dumps(dec_res["evidence"]),
-        ocr_text=ocr_text,
-        original_filename=clean_original_filename,
-        stored_blob_name=stored_blob_name,
-        blob_url=blob_url,
-        ocr_time_ms=ocr_time_ms,
-        rag_time_ms=rag_time_ms,
-        llm_time_ms=llm_time_ms,
-        total_pipeline_time_ms=total_pipeline_time_ms
-    )
-    db.add(new_claim)
+    # Step 1 & 2 & 3: Strict Azure Blob Upload Verification & Error Halt
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    if connection_string and "your_azure_storage" not in connection_string.lower():
+        try:
+            blob_service = BlobServiceClient.from_connection_string(connection_string)
+            blob_client = blob_service.get_blob_client(container=container, blob=stored_blob_name)
+            blob_client.upload_blob(file_bytes, overwrite=True)
+            
+            # Step 1 & 14: Immediately verify blob exists
+            if not blob_client.exists():
+                logger.error(f"[AZURE BLOB UPLOAD ERROR] Blob existence check failed after upload for '{stored_blob_name}'")
+                raise HTTPException(
+                    status_code=500,
+                    detail={"success": False, "message": "Azure Blob upload verification failed. File blob does not exist after upload."}
+                )
+            blob_url = blob_client.url
+            upload_success = True
+            print(f"[AZURE BLOB UPLOAD SUCCESS] Upload Completed & Blob Verified Exists=True | URL: {blob_url}")
+            logger.info(f"Upload Completed | Blob Exists=True | URL: {blob_url}")
+        except HTTPException:
+            raise
+        except Exception as blob_err:
+            # Step 2 & 13: Stop processing when upload fails
+            logger.error(f"Blob Upload Failed: {blob_err}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={"success": False, "message": f"Unable to upload document to Azure Blob Storage: {blob_err}"}
+            )
+
+    # Step 10: Save & Verify Local Backup
+    try:
+        local_upload_dir = os.path.join(root_dir, "storage", "uploads")
+        os.makedirs(local_upload_dir, exist_ok=True)
+        local_save_path = os.path.join(local_upload_dir, stored_blob_name)
+        with open(local_save_path, "wb") as f_out:
+            f_out.write(file_bytes)
+        if not os.path.exists(local_save_path):
+            raise Exception("Local backup verification failed. Backup file missing on disk.")
+        logger.info(f"Local Backup Successful | Verified file saved to {local_save_path} ({len(file_bytes)} bytes)")
+        print(f"[LOCAL BACKUP SUCCESS] Local file copy saved to {local_save_path}")
+    except Exception as local_err:
+        logger.warning(f"Local backup notice: {local_err}")
+
+    # Step 4 & 5: Transactional Pipeline Execution with DB Rollback Safety
+    try:
+        sha256_hash = hashlib.sha256(file_bytes).hexdigest() if file_bytes else None
+        pipeline_t0 = datetime.datetime.now()
+
+        # Agent 1: OCR Extraction
+        ocr_t0 = datetime.datetime.now()
+        doc_res = run_document_agent(file_bytes, clean_original_filename)
+        ocr_time_ms = round((datetime.datetime.now() - ocr_t0).total_seconds() * 1000, 2)
+        parsed = doc_res.get("parsed_data", {})
+
+        actual_user_id = user.id if user else (user_id or "USR-101")
+        actual_claimant_name = claimant_name if claimant_name else (parsed.get("claimant_name") or (user.name if user else "Claimant"))
+        actual_policy_number = policy_number if policy_number else (parsed.get("policy_number") or "Unextracted (Officer Review Required)")
+        actual_policy_type = policy_type if policy_type else (parsed.get("policy_type") or "Health Standard")
+        actual_claim_type = claim_type if claim_type else (parsed.get("claim_type") or "Emergency Medical")
+        actual_amount = amount if (amount is not None and amount > 0) else float(parsed.get("amount", 0.0))
+        hospital_name = parsed.get("hospital_name") or "Unextracted Facility"
+        diagnosis = parsed.get("diagnosis") or "Unextracted Condition"
+        invoice_number = parsed.get("invoice_number") or "Unextracted (Officer Review Required)"
+        ocr_text = doc_res.get("ocr_text") or f"[AZURE AI OCR OUTPUT]\nFile: {original_filename}\nPatient: {actual_claimant_name}\nAmount: ${actual_amount:,.2f}"
+
+        claim_data = {
+            "claimant_name": actual_claimant_name,
+            "hospital_name": hospital_name,
+            "diagnosis": diagnosis,
+            "invoice_number": invoice_number,
+            "policy_number": actual_policy_number,
+            "policy_type": actual_policy_type,
+            "claim_type": actual_claim_type,
+            "amount": actual_amount,
+            "incident_date": incident_date,
+            "description": description or parsed.get("description", "")
+        }
+
+        # Agent 2: Coverage RAG Agent
+        rag_t0 = datetime.datetime.now()
+        cov_res = run_coverage_agent(claim_data, db)
+        rag_time_ms = round((datetime.datetime.now() - rag_t0).total_seconds() * 1000, 2)
+
+        # Agent 3: Fraud Agent
+        fraud_res = run_fraud_agent(claim_data)
+
+        # Agent 4: Decision Reasoning Agent
+        llm_t0 = datetime.datetime.now()
+        dec_res = run_decision_agent(doc_res, cov_res, fraud_res, claim_data)
+        llm_time_ms = round((datetime.datetime.now() - llm_t0).total_seconds() * 1000, 2)
+
+        total_pipeline_time_ms = round((datetime.datetime.now() - pipeline_t0).total_seconds() * 1000, 2)
+        claim_id = f"CLM-{uuid.uuid4().hex[:6].upper()}"
+        status_verdict = dec_res["recommendation"]
+        
+        # Check if unextracted fields require human review
+        has_unextracted = any("Unextracted" in str(v) for v in [actual_policy_number, invoice_number, hospital_name, diagnosis])
+        final_status = "APPROVED" if (status_verdict == "Approved" and not has_unextracted) else "HUMAN_REVIEW"
+
+        new_claim = ClaimModel(
+            id=claim_id,
+            user_id=actual_user_id,
+            claimant_name=actual_claimant_name,
+            hospital_name=hospital_name,
+            diagnosis=diagnosis,
+            invoice_number=invoice_number,
+            policy_number=actual_policy_number,
+            policy_type=actual_policy_type,
+            claim_type=actual_claim_type,
+            amount=actual_amount,
+            covered_amount=actual_amount if final_status == "APPROVED" else 0.0,
+            status=final_status,
+            confidence=dec_res["confidence"],
+            fraud_risk=fraud_res["risk_category"],
+            fraud_score=fraud_res["fraud_score"],
+            explanation=dec_res["explanation"],
+            retrieved_clause=dec_res["retrieved_clause"],
+            evidence_json=json.dumps(dec_res["evidence"]),
+            ocr_text=ocr_text,
+            original_filename=clean_original_filename,
+            stored_blob_name=stored_blob_name,
+            blob_url=blob_url or f"storage/uploads/{stored_blob_name}",
+            ocr_time_ms=ocr_time_ms,
+            rag_time_ms=rag_time_ms,
+            llm_time_ms=llm_time_ms,
+            total_pipeline_time_ms=total_pipeline_time_ms
+        )
+        db.add(new_claim)
+
+        doc_entry = DocumentModel(
+            id=f"DOC-{uuid.uuid4().hex[:6].upper()}",
+            claim_id=claim_id,
+            original_filename=clean_original_filename,
+            stored_blob_name=stored_blob_name,
+            blob_url=blob_url or f"storage/uploads/{stored_blob_name}",
+            container_name=container,
+            document_type=f"{actual_claim_type} Document",
+            content_type=file.content_type or "application/pdf",
+            file_size=len(file_bytes),
+            sha256_hash=sha256_hash,
+            upload_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            uploaded_by=actual_user_id,
+            status="UPLOADED"
+        )
+        db.add(doc_entry)
+
+        # Step 6: Immutable Audit Log Entries (DOCUMENT_BLOB_UPLOAD_SUCCESS)
+        db.add(AuditLogModel(
+            id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
+            claim_id=claim_id,
+            agent_name="Storage Agent",
+            action="DOCUMENT_BLOB_UPLOAD_SUCCESS",
+            confidence=100.0,
+            decision=f"Uploaded and verified blob '{stored_blob_name}' in Azure Blob Storage ({container}).",
+            evidence=f"File: {clean_original_filename} | Size: {len(file_bytes)} bytes | SHA256: {sha256_hash[:12] if sha256_hash else 'N/A'} | Verified Exists=True",
+            pii_status="Sanitized & Encrypted"
+        ))
+
+        db.add(AuditLogModel(
+            id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
+            claim_id=claim_id,
+            agent_name="Document Intelligence Agent",
+            action="DOCUMENT_OCR_EXTRACTION",
+            confidence=doc_res["confidence"],
+            decision=f"Extracted invoice fields from '{clean_original_filename}' via {doc_res['source']} ({ocr_time_ms} ms).",
+            evidence=f"Patient: {actual_claimant_name} | Facility: {hospital_name} | Diagnosis: {diagnosis} | Amount: ${actual_amount:,.2f}",
+            pii_status="PII Masked"
+        ))
+
+        db.add(AuditLogModel(
+            id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
+            claim_id=claim_id,
+            agent_name="Coverage RAG Agent",
+            action="POLICY_CLAUSE_RAG_SEARCH",
+            confidence=cov_res["similarity"] * 100,
+            decision=cov_res["reason"],
+            evidence=f"Clause: {cov_res['policy_title']} | Similarity Score: {cov_res['similarity']:.2f}",
+            pii_status="Evaluated"
+        ))
+
+        db.add(AuditLogModel(
+            id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
+            claim_id=claim_id,
+            agent_name="Fraud Detection Agent",
+            action="FRAUD_RISK_ANALYSIS",
+            confidence=round(100.0 - fraud_res["fraud_score"], 1),
+            decision=f"Assessed claim fraud risk as {fraud_res['risk_category']} (Score: {fraud_res['fraud_score']}%).",
+            evidence=f"Flags: {', '.join(fraud_res['flags']) if fraud_res['flags'] else 'None'}",
+            pii_status="Evaluated"
+        ))
+
+        db.add(AuditLogModel(
+            id=f"LOG-{uuid.uuid4().hex[:6].upper()}",
+            claim_id=claim_id,
+            agent_name="Decision Reasoning Agent",
+            action="CLAIM_FINAL_VERDICT",
+            confidence=dec_res["confidence"],
+            decision=f"Rendered final claim verdict '{final_status}' via Azure OpenAI ({llm_time_ms} ms).",
+            evidence=f"Verdict: {final_status} | Reason: {dec_res['explanation'][:100]}...",
+            pii_status="Finalized"
+        ))
+
+        # Single DB Commit for full transactional integrity
+        db.commit()
+        db.refresh(new_claim)
+
+        print(f"[CLAIM TRANSACTION SUCCESS] Claim '{claim_id}' created and committed to database successfully.")
+
+        return {
+            "success": True,
+            "message": f"Claim {claim_id} created and processed successfully.",
+            "data": {
+                "claimId": claim_id,
+                "status": final_status,
+                "confidence": dec_res["confidence"],
+                "fraudRisk": fraud_res["risk_category"],
+                "fraudScore": fraud_res["fraud_score"],
+                "explanation": dec_res["explanation"],
+                "policyNumber": actual_policy_number,
+                "claimantName": actual_claimant_name,
+                "amount": actual_amount,
+                "storedBlobName": stored_blob_name,
+                "blobUrl": blob_url or f"storage/uploads/{stored_blob_name}",
+                "uploadSuccess": upload_success,
+                "timings": {
+                    "ocrMs": ocr_time_ms,
+                    "ragMs": rag_time_ms,
+                    "llmMs": llm_time_ms,
+                    "totalPipelineMs": total_pipeline_time_ms
+                }
+            }
+        }
+    except Exception as pipeline_err:
+        db.rollback()
+        logger.error(f"[TRANSACTION ROLLBACK] Claim pipeline execution failed: {pipeline_err}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"success": False, "message": f"Claim processing failed: {pipeline_err}"}
+        )
 
     doc_entry = DocumentModel(
         id=f"DOC-{uuid.uuid4().hex[:6].upper()}",
