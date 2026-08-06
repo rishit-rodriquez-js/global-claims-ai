@@ -9,9 +9,10 @@ logger = logging.getLogger("globalclaims")
 
 def parse_label_value_pairs(raw_text: str) -> dict:
     """
-    Generic line-by-line Label -> Value pair parser.
-    Scans document line-by-line to extract 'Label: Value' or 'Label \n Value' mappings.
-    Prevents text bleeding across lines and section boundaries.
+    Whole-Document Positional Label -> Value Pair Parser.
+    Locates every known label occurrence in the entire text and extracts values strictly
+    between adjacent label positions. Completely independent of line breaks.
+    Supports 'Label: Value', 'Label - Value', 'Label \n Value', and multi-line values.
     """
     if not raw_text:
         return {}
@@ -32,48 +33,65 @@ def parse_label_value_pairs(raw_text: str) -> dict:
     all_label_tuples = []
     for internal_field, aliases in LABEL_MAPPING.items():
         for alias in aliases:
-            all_label_tuples.append((alias.lower(), internal_field, alias))
+            all_label_tuples.append((alias, internal_field))
 
     all_label_tuples.sort(key=lambda x: len(x[0]), reverse=True)
 
+    label_occurrences = []
+    for alias, internal_field in all_label_tuples:
+        pattern = re.compile(r'(?:^|\n|\s)(' + re.escape(alias) + r')\s*[:\-#]?\s*', re.IGNORECASE)
+        for match in pattern.finditer(raw_text):
+            label_occurrences.append({
+                "alias": alias,
+                "internal_field": internal_field,
+                "start": match.start(1),
+                "end": match.end()
+            })
+
+    if not label_occurrences:
+        return {}
+
+    label_occurrences.sort(key=lambda x: x["start"])
+
+    filtered_occurrences = []
+    for occ in label_occurrences:
+        if not filtered_occurrences:
+            filtered_occurrences.append(occ)
+        else:
+            prev = filtered_occurrences[-1]
+            if occ["start"] >= prev["end"]:
+                filtered_occurrences.append(occ)
+
     extracted_dict = {}
-    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    for i in range(len(filtered_occurrences)):
+        curr = filtered_occurrences[i]
+        field_key = curr["internal_field"]
 
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        matched_field = None
-        matched_alias = None
-        matched_val = None
+        val_start = curr["end"]
+        val_end = filtered_occurrences[i + 1]["start"] if (i + 1 < len(filtered_occurrences)) else len(raw_text)
 
-        for alias_lower, internal_field, alias in all_label_tuples:
-            if line.lower().startswith(alias_lower):
-                matched_field = internal_field
-                matched_alias = alias
-                remainder = line[len(alias):].lstrip(":-# ").strip()
-                if remainder:
-                    matched_val = remainder
-                elif i + 1 < len(lines):
-                    next_line = lines[i + 1]
-                    is_next_label = any(next_line.lower().startswith(alt[0]) for alt in all_label_tuples)
-                    if not is_next_label:
-                        matched_val = next_line
-                        i += 1
-                break
+        raw_val = raw_text[val_start:val_end].strip()
+        cleaned_val = re.sub(r'^[:\-#\s]+', '', raw_val).strip()
 
-        if matched_field and matched_val and matched_field not in extracted_dict:
-            extracted_dict[matched_field] = matched_val
-
-        i += 1
+        if cleaned_val and field_key not in extracted_dict:
+            extracted_dict[field_key] = cleaned_val
 
     return extracted_dict
+
+
+def sanitize_fallback_value(val: str) -> str:
+    """Strips adjacent label text from regex fallback outputs to prevent concatenation."""
+    if not val:
+        return ""
+    cleaned = re.split(r'(?i)\s+(?:Policy|Claim|Amount|Date|Invoice|Facility|Vehicle|Diagnosis|Type|Category|Repair)', val)[0]
+    return cleaned.strip()
 
 
 def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     """
     Agent 1: Document Extraction Agent.
     Uses Azure AI Document Intelligence SDK as primary source.
-    Falls back to generic line-by-line Label -> Value parser and regex only when labels are missing.
+    Falls back to whole-document positional Label -> Value parser and sanitized regex only when labels are missing.
     Populates parsed_data directly from mapped values.
     """
     endpoint = os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
@@ -128,10 +146,10 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             logger.warning(f"Raw file text decoding notice: {decode_err}")
             raw_text = ""
 
-    # Line-by-Line Generic Label -> Value Parser
+    # Whole-Document Positional Label -> Value Parser
     parsed_pairs = parse_label_value_pairs(raw_text)
 
-    # Corrected Regex Fallback Patterns (Only used if label parser misses)
+    # Corrected Regex Fallback Patterns (Sanitized)
     claimant_match = re.search(r'(?:Claimant Full Name|Claimant Name|Claimant|Patient Name|Patient|Customer|Recipient)[:\s]+([A-Za-z0-9\s._-]+?)(?=\s+(?:Policy|Claim|Amount|Date|Invoice|Facility)|$|\n)', raw_text, re.IGNORECASE)
     policy_match = re.search(r'(?:Policy Number|Policy #|Policy|Pol)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
     date_match = re.search(r"(?:Incident Date|Date of Incident|Date)\s*[:\-]?\s*(\d{2}[-/]\d{2}[-/]\d{4}|\d{4}[-/]\d{2}[-/]\d{2})", raw_text, re.IGNORECASE)
@@ -150,14 +168,14 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             extracted_fields.get("Patient") or
             extracted_fields.get("ClaimantName") or
             parsed_pairs.get("claimant_name") or
-            (claimant_match.group(1).strip() if claimant_match else None) or
+            (sanitize_fallback_value(claimant_match.group(1)) if claimant_match else None) or
             "Unextracted (Officer Review Required)"
         )
 
     policy_number = (
         extracted_fields.get("PolicyNumber") or
         parsed_pairs.get("policy_number") or
-        (policy_match.group(1).strip() if policy_match else None) or
+        (sanitize_fallback_value(policy_match.group(1)) if policy_match else None) or
         "Unextracted (Officer Review Required)"
     )
 
