@@ -298,7 +298,13 @@ export default function DashboardView({
                     onClick={() => onSelectClaim(claim)}
                     className="hover:bg-slate-800/40 cursor-pointer transition-colors"
                   >
-                    <td className="py-3.5 px-4 font-mono font-medium text-blue-400">{claim.id}</td>
+                    <td className="py-3.5 px-4 font-mono font-medium text-blue-400">
+                      <div>{claim.id}</div>
+                      <div className="text-[10px] text-[#4DFFB4] font-mono flex items-center gap-1 mt-0.5 truncate max-w-[160px]">
+                        <FileCheck className="w-3 h-3 text-[#4DFFB4] shrink-0" />
+                        <span>{claim.documentName || claim.originalFilename || 'uploaded_doc.pdf'}</span>
+                      </div>
+                    </td>
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-white">{claim.claimantName}</div>
                       <div className="text-[10px] text-slate-400">{claim.hospitalName || 'Metro Health'} • <span className="text-blue-300">{claim.diagnosis || 'Care'}</span></div>

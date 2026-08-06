@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import ExplainabilityTimeline from '../components/ExplainabilityTimeline.jsx';
 import DocumentExtractionReport from '../components/DocumentExtractionReport.jsx';
+import EmbeddedPdfViewer from '../components/EmbeddedPdfViewer.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ClaimDetailView({ claim, onBack, onNavigateOfficer }) {
@@ -171,6 +172,16 @@ export default function ClaimDetailView({ claim, onBack, onNavigateOfficer }) {
             </div>
 
             <ExplainabilityTimeline timeline={claim.timeline} />
+
+            {/* Embedded Source Document Inspection View */}
+            <EmbeddedPdfViewer
+              blobUrl={claim.blobUrl}
+              documentName={claim.documentName || claim.originalFilename}
+              storedBlobName={claim.storedBlobName}
+              fileSize={claim.fileSize}
+              ocrText={claim.ocrText}
+            />
+
             <DocumentExtractionReport claim={claim} />
           </motion.div>
         )}

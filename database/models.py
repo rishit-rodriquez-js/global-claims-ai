@@ -46,6 +46,9 @@ class ClaimModel(Base):
     retrieved_clause = Column(Text, nullable=True)
     evidence_json = Column(Text, nullable=True)
     ocr_text = Column(Text, nullable=True)
+    original_filename = Column(String, nullable=True)
+    stored_blob_name = Column(String, nullable=True)
+    blob_url = Column(String, nullable=True)
     created_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     user = relationship("UserModel", back_populates="claims")
@@ -58,8 +61,12 @@ class DocumentModel(Base):
 
     id = Column(String, primary_key=True, index=True)
     claim_id = Column(String, ForeignKey("claims.id"), nullable=False)
+    original_filename = Column(String, nullable=False, default="document.pdf")
+    stored_blob_name = Column(String, nullable=False, default="document.pdf")
     blob_url = Column(String, nullable=False)
-    document_type = Column(String, nullable=False)
+    document_type = Column(String, nullable=False, default="Claim Document")
+    content_type = Column(String, default="application/pdf")
+    file_size = Column(Integer, default=0)
     created_at = Column(String, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     claim = relationship("ClaimModel", back_populates="documents")

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { reviewClaimApi } from '../services/api.js';
 import DocumentExtractionReport from '../components/DocumentExtractionReport.jsx';
+import EmbeddedPdfViewer from '../components/EmbeddedPdfViewer.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -185,6 +186,15 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
               <span className="text-slate-300">{activeClaim.submittedDate}</span>
             </div>
           </div>
+
+          {/* Embedded Source Document Inspection Viewer */}
+          <EmbeddedPdfViewer
+            blobUrl={activeClaim.blobUrl}
+            documentName={activeClaim.documentName || activeClaim.originalFilename}
+            storedBlobName={activeClaim.storedBlobName}
+            fileSize={activeClaim.fileSize}
+            ocrText={activeClaim.ocrText}
+          />
 
           {/* Document Extraction Report Component (Full Width) */}
           <DocumentExtractionReport claim={activeClaim} />
