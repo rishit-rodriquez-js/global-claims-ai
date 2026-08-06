@@ -23,7 +23,7 @@ def parse_label_value_pairs(raw_text: str) -> dict:
         "policy_type": ["Policy Category", "Policy Type", "Category"],
         "claim_type": ["Claim Type", "Type"],
         "amount": ["Claim Amount", "Total Amount", "Amount", "Total", "Balance", "Due", "Invoice Total"],
-        "incident_date": ["Incident Date", "Date of Incident", "Date"],
+        "incident_date": ["Incident Date", "Invoice Date", "Service Date", "Date of Loss", "Loss Date", "Date of Incident", "Date"],
         "invoice_number": ["Invoice Number", "Invoice #", "Invoice ID", "Invoice", "Inv", "Receipt"],
         "hospital_name": ["Repair Facility", "Facility", "Hospital", "Provider", "Clinic", "Center", "Vendor"],
         "vehicle": ["Vehicle Make/Model", "Vehicle Model", "Vehicle", "Car", "Make", "Manufacturer", "Registration", "VIN"],
@@ -149,10 +149,14 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     # Whole-Document Positional Label -> Value Parser
     parsed_pairs = parse_label_value_pairs(raw_text)
 
-    # Corrected Regex Fallback Patterns (Sanitized)
+    # Logging for diagnostic verification
+    logger.info(f"[AZURE OCR EXTRACTED FIELDS] {extracted_fields}")
+    logger.info(f"[PARSED LABEL PAIRS] {parsed_pairs}")
+
+    # Corrected & Expanded Regex Fallback Patterns (Sanitized)
     claimant_match = re.search(r'(?:Claimant Full Name|Claimant Name|Claimant|Patient Name|Patient|Customer|Recipient)[:\s]+([A-Za-z0-9\s._-]+?)(?=\s+(?:Policy|Claim|Amount|Date|Invoice|Facility)|$|\n)', raw_text, re.IGNORECASE)
     policy_match = re.search(r'(?:Policy Number|Policy #|Policy|Pol)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
-    date_match = re.search(r"(?:Incident Date|Date of Incident|Date)\s*[:\-]?\s*(\d{2}[-/]\d{2}[-/]\d{4}|\d{4}[-/]\d{2}[-/]\d{2})", raw_text, re.IGNORECASE)
+    date_match = re.search(r"(?:Incident Date|Invoice Date|Service Date|Date of Loss|Loss Date|Date of Incident|Date)\s*[:\-]?\s*([0-3]?\d[-/][01]?\d[-/]\d{4}|\d{4}[-/][01]?\d[-/][0-3]?\d)", raw_text, re.IGNORECASE)
     amount_match = re.search(r'(?:Claim Amount|Total Amount|Amount|Total|Balance|Due)[:\s$]+([\d,]+\.?\d*)', raw_text, re.IGNORECASE)
 
     is_auto = any(term in file_name.lower() or term in raw_text.lower() for term in ["auto", "collision", "vehicle", "repair", "car"])
@@ -206,9 +210,16 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     )
 
     incident_date_val = (
+        extracted_fields.get("IncidentDate") or
+        extracted_fields.get("Incident Date") or
         extracted_fields.get("InvoiceDate") or
+        extracted_fields.get("Invoice Date") or
+        extracted_fields.get("ServiceDate") or
+        extracted_fields.get("Service Date") or
+        extracted_fields.get("Date") or
         parsed_pairs.get("incident_date") or
-        (date_match.group(1).strip() if date_match else datetime.datetime.now().strftime("%Y-%m-%d"))
+        (date_match.group(1).strip() if date_match else None) or
+        datetime.datetime.now().strftime("%Y-%m-%d")
     )
 
     invoice_number = (
@@ -288,6 +299,7 @@ Raw Stream Length: {len(file_bytes)} bytes
             "vehicle": vehicle_info,
             "policy_number": policy_number,
             "invoice_number": invoice_number,
+            "incident_date": incident_date_val,
             "diagnosis": diagnosis,
             "amount": amount_val,
             "file_size": len(file_bytes)

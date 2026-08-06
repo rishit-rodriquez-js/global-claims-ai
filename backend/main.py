@@ -902,6 +902,7 @@ async def parse_document(file: UploadFile = File(...), user: UserModel = Depends
     return {
         "status": "success",
         "filename": clean_filename,
+        "incident_date": parsed.get("incident_date", ""),
         "extracted_data": parsed,
         "raw_ocr": doc_res
     }
