@@ -1,6 +1,8 @@
 # GlobalClaims AI — Automated & Explainable Insurance Claim Processing Platform
 
 > **GenAI Designathon MVP** — An AI-powered insurance claim processing platform that automates routine claim approvals while keeping a Human Claims Officer in the loop for uncertain or high-risk decisions.
+>
+> 🌐 **Live Web Application:** [https://global-claims-ai-chi.vercel.app/](https://global-claims-ai-chi.vercel.app/)
 
 ---
 
