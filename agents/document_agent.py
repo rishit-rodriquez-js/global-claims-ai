@@ -98,16 +98,6 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
             (policy_match.group(1) if policy_match else None) or 
             "POL-HTH-7721"
         )
-            (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
-            diagnoses_pool[(hash_num // 5) % len(diagnoses_pool)]
-        )
-        policy_type = "Health Standard"
-        claim_type = "Emergency Medical"
-        policy_number = (
-            extracted_fields.get("PolicyNumber") or 
-            (policy_match.group(1) if policy_match else None) or 
-            f"POL-HTH-{(hash_num % 8999) + 1000}"
-        )
 
     invoice_number = (
         extracted_fields.get("InvoiceId") or 
