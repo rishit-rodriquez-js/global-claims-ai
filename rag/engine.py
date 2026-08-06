@@ -47,16 +47,32 @@ def search_policy_clauses(query: str, policy_type: str, db: Session) -> dict:
     if search_endpoint and search_key and search_key != "your_search_key":
         try:
             from azure.search.documents import SearchClient
+            from azure.search.documents.models import VectorizedQuery
             from azure.core.credentials import AzureKeyCredential
 
             client = SearchClient(search_endpoint, search_index, AzureKeyCredential(search_key))
-            results = client.search(search_text=query, top=2)
+            
+            if query_vector:
+                vector_query = VectorizedQuery(
+                    vector=query_vector,
+                    k_nearest_neighbors=3,
+                    fields="content_vector"
+                )
+                results = client.search(
+                    search_text=query,
+                    vector_queries=[vector_query],
+                    top=2
+                )
+            else:
+                results = client.search(search_text=query, top=2)
+
             retrieved = []
             for r in results:
                 retrieved.append({
                     "title": r.get("title", "Policy Clause"),
                     "content": r.get("content", ""),
-                    "score": r.get("@search.score", 0.95)
+                    "score": float(r.get("@search.score", 0.95)),
+                    "coverage_limit": float(r.get("coverage_limit", 5000.0))
                 })
 
             if retrieved:
