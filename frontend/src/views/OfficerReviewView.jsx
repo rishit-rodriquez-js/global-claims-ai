@@ -24,6 +24,14 @@ export default function OfficerReviewView({ claims = [], onUpdateClaimStatus, cu
   const [errorMessage, setErrorMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Auto-sync selected claim when claims list updates or new claim is uploaded
+  useEffect(() => {
+    const newestPending = claims.find(c => c.status === 'Human Review') || claims[0];
+    if (newestPending && (!selectedClaimId || !claims.some(c => c.id === selectedClaimId))) {
+      setSelectedClaimId(newestPending.id);
+    }
+  }, [claims]);
+
   const activeClaim = claims.find(c => c.id === selectedClaimId) || claims[0];
 
   const handleDecision = async (action) => {

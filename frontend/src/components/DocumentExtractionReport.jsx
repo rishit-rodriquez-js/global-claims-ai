@@ -180,7 +180,8 @@ export default function DocumentExtractionReport({ claim }) {
             </span>
           </div>
 
-          <h2 className="text-base font-bold text-white tracking-tight font-mono truncate max-w-xl">
+          <h2 className="text-base font-bold text-white tracking-tight font-mono truncate max-w-xl flex items-center gap-2">
+            <FileCheck className="w-4 h-4 text-[#4DFFB4]" />
             {documentName}
           </h2>
 
@@ -190,10 +191,22 @@ export default function DocumentExtractionReport({ claim }) {
         </div>
 
         {/* Clean Enterprise Export Menu Dropdown */}
-        <div className="relative shrink-0 pt-1">
+        <div className="relative shrink-0 pt-1 flex items-center gap-2">
+          {claim.blobUrl && (
+            <a
+              href={claim.blobUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 bg-[#3BCBFF]/10 text-[#3BCBFF] border border-[#3BCBFF]/30 hover:bg-[#3BCBFF]/20 font-semibold rounded-xl text-xs flex items-center gap-1.5 transition-all"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>View Document</span>
+            </a>
+          )}
+
           <button
             onClick={() => setIsExportOpen(!isExportOpen)}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/10 transition-all border border-blue-400/30"
+            className="px-4 py-2 bg-gradient-to-r from-[#4DFFB4] to-[#3BCBFF] hover:opacity-90 text-[#081018] font-bold rounded-xl text-xs flex items-center gap-2 shadow-[0_0_20px_rgba(77,255,180,0.3)] transition-all border border-[#4DFFB4]/30"
           >
             <Download className="w-4 h-4" />
             <span>Export Report</span>
@@ -201,12 +214,12 @@ export default function DocumentExtractionReport({ claim }) {
           </button>
 
           {isExportOpen && (
-            <div className="absolute right-0 mt-2 w-64 glass-panel bg-[#0f172a]/95 border border-slate-700/80 rounded-2xl shadow-2xl z-50 py-2 backdrop-blur-xl animate-fade-in animate-slide-up">
+            <div className="absolute right-0 mt-2 w-64 glass-panel bg-[#10252E]/95 border border-white/10 rounded-2xl shadow-2xl z-50 py-2 backdrop-blur-xl animate-fade-in animate-slide-up">
               <button
                 onClick={handleExportExcel}
-                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-800/80"
+                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-white/10 hover:text-white flex items-center gap-3 transition-colors border-b border-white/10"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+                <FileSpreadsheet className="w-4 h-4 text-[#4DFFB4] shrink-0" />
                 <div>
                   <div className="font-semibold text-white">Excel Workbook (.xlsx)</div>
                   <div className="text-[10px] text-slate-400">4 Multi-sheet Workbook</div>
@@ -215,9 +228,9 @@ export default function DocumentExtractionReport({ claim }) {
 
               <button
                 onClick={handleExportJson}
-                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-800/80"
+                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-white/10 hover:text-white flex items-center gap-3 transition-colors border-b border-white/10"
               >
-                <FileCode className="w-4 h-4 text-blue-400 shrink-0" />
+                <FileCode className="w-4 h-4 text-[#3BCBFF] shrink-0" />
                 <div>
                   <div className="font-semibold text-white">Structured JSON (.json)</div>
                   <div className="text-[10px] text-slate-400">Full API extraction payload</div>
@@ -226,9 +239,9 @@ export default function DocumentExtractionReport({ claim }) {
 
               <button
                 onClick={handleExportCsv}
-                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-800/80"
+                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-white/10 hover:text-white flex items-center gap-3 transition-colors border-b border-white/10"
               >
-                <FileDown className="w-4 h-4 text-amber-400 shrink-0" />
+                <FileDown className="w-4 h-4 text-[#FF8761] shrink-0" />
                 <div>
                   <div className="font-semibold text-white">Tabular CSV (.csv)</div>
                   <div className="text-[10px] text-slate-400">Key-value field list</div>
@@ -237,9 +250,9 @@ export default function DocumentExtractionReport({ claim }) {
 
               <button
                 onClick={handleExportRawTxt}
-                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-3 transition-colors"
+                className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-white/10 hover:text-white flex items-center gap-3 transition-colors"
               >
-                <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+                <FileText className="w-4 h-4 text-[#FFC857] shrink-0" />
                 <div>
                   <div className="font-semibold text-white">Raw OCR Text (.txt)</div>
                   <div className="text-[10px] text-slate-400">Unfiltered OCR text stream</div>
