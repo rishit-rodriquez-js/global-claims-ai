@@ -675,6 +675,7 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
     stored_name = c.stored_blob_name or (doc.stored_blob_name if doc else None) or f"claim_doc_{c.id.lower()}.pdf"
     orig_name = c.original_filename or (doc.original_filename if doc else f"{c.id.lower()}_document.pdf")
 
+    # 1. Check Azure Blob Storage stream first
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if connection_string and "your_azure_storage" not in connection_string.lower():
         try:
@@ -692,12 +693,28 @@ def stream_claim_document(claim_id: str, db: Session = Depends(get_db)):
         except Exception as e:
             logger.warning(f"Blob stream direct read notice for {stored_name}: {e}")
 
+    # 2. Check local disk persistence storage/uploads/ second
+    local_upload_dir = os.path.join(root_dir, "storage", "uploads")
+    local_file_path = os.path.join(local_upload_dir, stored_name)
+    if os.path.exists(local_file_path):
+        try:
+            with open(local_file_path, "rb") as f:
+                pdf_bytes = f.read()
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f"inline; filename=\"{orig_name}\""}
+                )
+        except Exception as local_err:
+            logger.warning(f"Local file stream notice for {stored_name}: {local_err}")
+
+    # 3. Dynamic PDF Fallback
     pdf_content = f"""%PDF-1.4
 1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj
 2 0 obj <</Type /Pages /Kinds [3 0 R] /Count 1>> endobj
 3 0 obj <</Type /Page /Parent 2 0 R /Resources <<>> /Contents 4 0 R>> endobj
 4 0 obj <</Length 180>> stream
-BT /F1 12 Tf 50 700 TD (GlobalClaims AI - Azure Private Storage Stream) Tj 50 670 TD (Claim ID: {c.id}) Tj 50 650 TD (Original File: {orig_name}) Tj 50 630 TD (Stored Blob Name: {stored_name}) Tj ET
+BT /F1 12 Tf 50 700 TD (GlobalClaims AI - Private Document Stream) Tj 50 670 TD (Claim ID: {c.id}) Tj 50 650 TD (Original File: {orig_name}) Tj 50 630 TD (Stored Blob Name: {stored_name}) Tj ET
 endstream endobj
 xref 0 5
 trailer <</Size 5 /Root 1 0 R>>
@@ -777,12 +794,20 @@ async def submit_claim(
             except Exception as blob_err:
                 logger.warning(f"Azure Blob upload notice: {blob_err}. Preserving local Blob URL reference.")
                 blob_url = f"https://{account_name}.blob.core.windows.net/{container}/{stored_blob_name}"
-        else:
-            blob_url = f"https://{account_name}.blob.core.windows.net/{container}/{stored_blob_name}"
+        # Persist uploaded file bytes locally to storage/uploads/ for guaranteed streaming availability
+        try:
+            local_upload_dir = os.path.join(root_dir, "storage", "uploads")
+            os.makedirs(local_upload_dir, exist_ok=True)
+            local_save_path = os.path.join(local_upload_dir, stored_blob_name)
+            with open(local_save_path, "wb") as f_out:
+                f_out.write(file_bytes)
+            logger.info(f"Persisted local file copy to {local_save_path} ({len(file_bytes)} bytes)")
+        except Exception as local_err:
+            logger.warning(f"Local file persistence notice: {local_err}")
 
     print(f"[AZURE BLOB UPLOAD] Original filename: {clean_original_filename}")
     print(f"[AZURE BLOB UPLOAD] Stored blob name: {stored_blob_name}")
-    print(f"[AZURE BLOB UPLOAD] Upload successful: {upload_success}")
+    print(f"[AZURE BLOB UPLOAD] Azure Upload Successful: {upload_success}")
     print(f"[AZURE BLOB UPLOAD] Blob URL: {blob_url}")
 
     # Calculate SHA256 file hash for transaction verification
