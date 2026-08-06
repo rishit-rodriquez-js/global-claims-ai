@@ -45,25 +45,36 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
         except Exception as doc_err:
             logger.warning(f"Azure AI Document Intelligence notice: {doc_err}. Proceeding with byte parsing.")
 
-    # Extract text from raw bytes
+    # Extract text using pypdf first, then fallback to raw byte decoding
     raw_text = ""
-    try:
-        raw_text = file_bytes.decode('utf-8', errors='ignore')
-    except Exception as decode_err:
-        logger.warning(f"Raw file text decoding notice: {decode_err}")
-        raw_text = ""
+    if file_bytes:
+        try:
+            import io
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            pdf_text = "\n".join([page.extract_text() or "" for page in reader.pages])
+            if pdf_text.strip():
+                raw_text = pdf_text
+                logger.info(f"pypdf text extraction success for '{file_name}' ({len(raw_text)} chars)")
+        except Exception as pdf_err:
+            logger.warning(f"pypdf extraction notice: {pdf_err}")
 
-    # Regex extraction attempts
-    claimant_match = re.search(r'(?:Claimant|Patient|Name|Customer)[:\s]+([A-Z][a-zA-Z0-9\s._]+)', raw_text, re.IGNORECASE)
-    hospital_match = re.search(r'(?:Hospital|Facility|Center|Clinic|Provider|Repair)[:\s]+([A-Za-z0-9\s.,]+)', raw_text, re.IGNORECASE)
-    policy_match = re.search(r'(?:Policy|Pol)[:\s#]+([A-Z0-9-]+)', raw_text, re.IGNORECASE)
-    invoice_match = re.search(r'(?:Invoice|Inv|Receipt)[:\s#]+([A-Z0-9-]+)', raw_text, re.IGNORECASE)
-    amount_match = re.search(r'(?:Total|Amount|Balance|Due)[:\s$]+([\d,]+\.?\d*)', raw_text, re.IGNORECASE)
-    diagnosis_match = re.search(r'(?:Diagnosis|Reason|Condition|Damage)[:\s]+([A-Za-z0-9\s.,]+)', raw_text, re.IGNORECASE)
+    if not raw_text:
+        try:
+            raw_text = file_bytes.decode('utf-8', errors='ignore')
+        except Exception as decode_err:
+            logger.warning(f"Raw file text decoding notice: {decode_err}")
+            raw_text = ""
 
-    # Compute SHA256 file hash and deterministic integer for upload verification
-    file_hash = hashlib.sha256(file_bytes).hexdigest() if file_bytes else hashlib.sha256(file_name.encode('utf-8')).hexdigest()
-    hash_num = int(file_hash[:8], 16)
+    # Comprehensive Regex Extraction Patterns for generated PDFs and live invoices
+    claimant_match = re.search(r'(?:Claimant Full Name|Claimant Name|Claimant|Patient Name|Patient|Customer|Recipient)[:\s]+([A-Za-z0-9\s._-]+)', raw_text, re.IGNORECASE)
+    policy_match = re.search(r'(?:Policy Number|Policy #|Policy|Pol)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
+    policy_type_match = re.search(r'(?:Policy Category|Policy Type|Category)[:\s]+([A-Za-z0-9\s-]+)', raw_text, re.IGNORECASE)
+    claim_type_match = re.search(r'(?:Claim Type|Type)[:\s]+([A-Za-z0-9\s-]+)', raw_text, re.IGNORECASE)
+    hospital_match = re.search(r'(?:Hospital|Facility|Center|Clinic|Provider|Repair Shop|Repair Center|Vendor)[:\s]+([A-Za-z0-9\s.,-]+)', raw_text, re.IGNORECASE)
+    invoice_match = re.search(r'(?:Invoice Number|Invoice #|Invoice|Inv|Receipt)[:\s#]+([A-Za-z0-9-]+)', raw_text, re.IGNORECASE)
+    amount_match = re.search(r'(?:Claim Amount|Total Amount|Amount|Total|Balance|Due)[:\s$]+([\d,]+\.?\d*)', raw_text, re.IGNORECASE)
+    diagnosis_match = re.search(r'(?:Incident Description|Description|Diagnosis|Reason|Condition|Damage)[:\s]+([^\n\r]+)', raw_text, re.IGNORECASE)
 
     # Filename or content semantic detection
     is_auto = any(term in file_name.lower() or term in raw_text.lower() for term in ["auto", "collision", "vehicle", "repair", "car"])
@@ -81,8 +92,18 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
 
     policy_number = (
         extracted_fields.get("PolicyNumber") or 
-        (policy_match.group(1) if policy_match else None) or 
+        (policy_match.group(1).strip() if policy_match else None) or 
         "Unextracted (Officer Review Required)"
+    )
+
+    policy_type = (
+        (policy_type_match.group(1).strip() if policy_type_match else None) or
+        ("Auto Premium" if is_auto else "Health Standard")
+    )
+
+    claim_type = (
+        (claim_type_match.group(1).strip() if claim_type_match else None) or
+        ("Collision Damage Repair" if is_auto else "Emergency Medical")
     )
 
     hospital_name = (
@@ -90,16 +111,15 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
         (hospital_match.group(1).strip() if hospital_match else None) or 
         "Unextracted Facility"
     )
+
     diagnosis = (
         (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
         "Unextracted Condition"
     )
-    policy_type = "Auto Premium" if is_auto else "Health Standard"
-    claim_type = "Collision Damage Repair" if is_auto else "Emergency Medical"
 
     invoice_number = (
         extracted_fields.get("InvoiceId") or 
-        (invoice_match.group(1) if invoice_match else None) or 
+        (invoice_match.group(1).strip() if invoice_match else None) or 
         "Unextracted (Officer Review Required)"
     )
 
@@ -116,13 +136,17 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     else:
         amount_val = 0.0
 
-    # Calculate dynamic OCR confidence based on extracted field completeness
-    has_claimant = claimant_name and "Unextracted" not in claimant_name
-    has_policy = policy_number and "Unextracted" not in policy_number
-    has_amount = amount_val > 0.0
-
-    extracted_count = sum([bool(has_claimant), bool(has_policy), bool(has_amount), bool(invoice_number and "Unextracted" not in invoice_number)])
-    confidence_score = round(60.0 + (extracted_count * 9.5), 1)
+    # Calculate extraction confidence based on field completeness
+    fields_checked = [
+        claimant_name and "Unextracted" not in claimant_name,
+        policy_number and "Unextracted" not in policy_number,
+        invoice_number and "Unextracted" not in invoice_number,
+        hospital_name and "Unextracted" not in hospital_name,
+        diagnosis and "Unextracted" not in diagnosis,
+        amount_val > 0.0
+    ]
+    extracted_count = sum(bool(f) for f in fields_checked)
+    confidence_score = round(min(100.0, (extracted_count / len(fields_checked)) * 100.0), 1)
 
     ocr_formatted_text = f"""[AZURE AI DOCUMENT INTELLIGENCE OCR OUTPUT]
 Document File: {file_name}
@@ -130,6 +154,8 @@ Extracted Patient: {claimant_name}
 Facility: {hospital_name}
 Invoice #: {invoice_number}
 Policy #: {policy_number}
+Policy Category: {policy_type}
+Claim Type: {claim_type}
 Diagnosis: {diagnosis}
 Itemized Total: ${amount_val:,.2f}
 Extraction Confidence: {confidence_score}%

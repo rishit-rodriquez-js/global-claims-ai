@@ -10,7 +10,8 @@ import {
   Zap,
   ArrowUpRight,
   BarChart2,
-  List
+  List,
+  FileCheck
 } from 'lucide-react';
 import AnalyticsCharts from '../components/AnalyticsCharts.jsx';
 import EmptyState from '../components/EmptyState.jsx';
