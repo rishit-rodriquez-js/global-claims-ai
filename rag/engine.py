@@ -5,18 +5,44 @@ from database.models import PolicyClauseModel
 
 logger = logging.getLogger("globalclaims")
 
+def generate_query_embedding(query_text: str) -> list:
+    """
+    Generates text embedding vector using Azure OpenAI text-embedding-3-small deployment.
+    """
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_KEY")
+    deployment = os.getenv("AZURE_EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
+    
+    if endpoint and key and "your_azure_openai" not in key.lower():
+        try:
+            from openai import AzureOpenAI
+            api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-06-01")
+            client = AzureOpenAI(azure_endpoint=endpoint, api_key=key, api_version=api_version)
+            response = client.embeddings.create(input=query_text, model=deployment)
+            vector = response.data[0].embedding
+            print(f"[AZURE OPENAI EMBEDDINGS] Generated vector embedding ({len(vector)} dimensions) using deployment '{deployment}'")
+            logger.info(f"--- AZURE OPENAI EMBEDDINGS --- Generated vector ({len(vector)} dims) for deployment '{deployment}'")
+            return vector
+        except Exception as embed_err:
+            logger.warning(f"Azure OpenAI Embedding generation notice: {embed_err}")
+            print(f"[AZURE OPENAI EMBEDDINGS NOTICE] {embed_err}")
+    return []
+
 def search_policy_clauses(query: str, policy_type: str, db: Session) -> dict:
     """
-    RAG Policy Clause Search.
-    Uses Azure AI Search if credentials are configured.
+    RAG Policy Clause Search with Vector Embeddings.
+    Uses Azure AI Search & Azure OpenAI Embeddings if configured.
     Otherwise queries SQLite PolicyClause database cleanly.
     """
     search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT") or os.getenv("AZURE_AI_SEARCH_ENDPOINT")
     search_key = os.getenv("AZURE_SEARCH_KEY") or os.getenv("AZURE_AI_SEARCH_KEY")
     search_index = os.getenv("AZURE_SEARCH_INDEX") or os.getenv("AZURE_AI_SEARCH_INDEX", "insurance-policies-index")
 
-    print(f"[RAG INVOCATION] Query: '{query}' | Target Index: '{search_index}' | Azure Search Configured: {bool(search_endpoint and search_key)}")
-    logger.info(f"--- RAG POLICY CLAUSE SEARCH --- Query: '{query}' | Index: '{search_index}'")
+    # Generate vector embedding for semantic/hybrid search
+    query_vector = generate_query_embedding(query)
+
+    print(f"[RAG INVOCATION] Query: '{query}' | Target Index: '{search_index}' | Azure Search: {bool(search_endpoint and search_key)} | Vector Dims: {len(query_vector)}")
+    logger.info(f"--- RAG POLICY CLAUSE SEARCH --- Query: '{query}' | Index: '{search_index}' | Vector Dims: {len(query_vector)}")
 
     if search_endpoint and search_key and search_key != "your_search_key":
         try:

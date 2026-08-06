@@ -1,7 +1,11 @@
 import os
 import re
 import hashlib
+import datetime
+import logging
 from utils.guardrails import sanitize_extracted_text
+
+logger = logging.getLogger("globalclaims")
 
 def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
     """
@@ -77,51 +81,50 @@ def run_document_agent(file_bytes: bytes, file_name: str) -> dict:
         )
         policy_type = "Auto Premium"
         claim_type = "Collision Damage Repair"
-        policy_number = (
-            extracted_fields.get("PolicyNumber") or 
-            (policy_match.group(1) if policy_match else None) or 
-            "POL-AUT-8824"
-        )
-    else:
-        hospital_name = (
-            extracted_fields.get("VendorName") or 
-            (hospital_match.group(1).strip() if hospital_match else None) or 
-            "Unextracted Medical Facility"
-        )
-        diagnosis = (
-            (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
-            "Unextracted Medical Condition"
-        )
-        policy_type = "Health Standard"
-        claim_type = "Emergency Medical"
-        policy_number = (
-            extracted_fields.get("PolicyNumber") or 
-            (policy_match.group(1) if policy_match else None) or 
-            "POL-HTH-7721"
-        )
+    policy_number = (
+        extracted_fields.get("PolicyNumber") or 
+        (policy_match.group(1) if policy_match else None) or 
+        "Unextracted (Officer Review Required)"
+    )
+
+    hospital_name = (
+        extracted_fields.get("VendorName") or 
+        (hospital_match.group(1).strip() if hospital_match else None) or 
+        ("Apex Auto Collision Repair" if is_auto else "Unextracted Medical Facility")
+    )
+    diagnosis = (
+        (diagnosis_match.group(1).strip() if diagnosis_match else None) or 
+        ("Collision Damage & Body Repair" if is_auto else "Unextracted Medical Condition")
+    )
+    policy_type = "Auto Premium" if is_auto else "Health Standard"
+    claim_type = "Collision Damage Repair" if is_auto else "Emergency Medical"
 
     invoice_number = (
         extracted_fields.get("InvoiceId") or 
         (invoice_match.group(1) if invoice_match else None) or 
-        f"INV-2026-{(hash_num % 89999) + 10000}"
+        "Unextracted (Officer Review Required)"
     )
 
-    if is_auto and not amount_match and "InvoiceTotal" not in extracted_fields:
-        amount_val = 8450.00
-    elif amount_match:
+    if amount_match:
         try:
             amount_val = float(amount_match.group(1).replace(',', ''))
         except ValueError:
-            amount_val = round(1200.00 + (hash_num % 450000) / 100.0, 2)
+            amount_val = 0.0
     elif "InvoiceTotal" in extracted_fields:
         try:
             amount_val = float(re.sub(r'[^\d.]', '', str(extracted_fields["InvoiceTotal"])))
         except Exception:
-            amount_val = round(1200.00 + (hash_num % 450000) / 100.0, 2)
+            amount_val = 0.0
     else:
-        amount_val = round(1200.00 + (hash_num % 450000) / 100.0, 2)
+        amount_val = 0.0
 
-    confidence_score = round(93.5 + (hash_num % 50) / 10.0, 1)
+    # Calculate dynamic OCR confidence based on extracted field completeness
+    has_claimant = claimant_name and "Unextracted" not in claimant_name
+    has_policy = policy_number and "Unextracted" not in policy_number
+    has_amount = amount_val > 0.0
+
+    extracted_count = sum([bool(has_claimant), bool(has_policy), bool(has_amount), bool(invoice_number and "Unextracted" not in invoice_number)])
+    confidence_score = round(60.0 + (extracted_count * 9.5), 1)
 
     ocr_formatted_text = f"""[AZURE AI DOCUMENT INTELLIGENCE OCR OUTPUT]
 Document File: {file_name}
@@ -163,7 +166,7 @@ Raw Stream Length: {len(file_bytes)} bytes
             "policy_type": "Health Standard" if "HTH" in policy_number else "Auto Premium",
             "claim_type": "Emergency Medical" if "HTH" in policy_number else "Vehicle Repair",
             "amount": amount_val,
-            "incident_date": "2026-08-04",
+            "incident_date": datetime.datetime.now().strftime("%Y-%m-%d"),
             "description": f"Extracted itemized bill for {claimant_name} at {hospital_name}. Diagnosis: {diagnosis}."
         }
     }
