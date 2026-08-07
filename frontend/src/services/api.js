@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '') + '/api';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://global-claims-ai.onrender.com').replace(/\/$/, '') + '/api';
 
 export function getAccessToken() {
   return localStorage.getItem('gc_access_token');

@@ -34,7 +34,7 @@ export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, stor
           setIsLoadingAuth(false);
         }
       } else {
-        const fallbackUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '') + '/api/claims/CLM-101/document-stream';
+        const fallbackUrl = (import.meta.env.VITE_API_URL || 'https://global-claims-ai.onrender.com').replace(/\/$/, '') + '/api/claims/CLM-101/document-stream';
         if (isMounted) {
           setAuthorizedUrl(fallbackUrl);
           setIsLoadingAuth(false);
@@ -45,7 +45,7 @@ export default function EmbeddedPdfViewer({ claimId, blobUrl, documentName, stor
     return () => { isMounted = false; };
   }, [claimId, blobUrl]);
 
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '') + '/api';
+  const apiBase = (import.meta.env.VITE_API_URL || 'https://global-claims-ai.onrender.com').replace(/\/$/, '') + '/api';
   const previewStreamUrl = claimId ? `${apiBase}/claims/${claimId}/document-stream` : `${apiBase}/claims/CLM-101/document-stream`;
   const explicitDownloadUrl = claimId ? `${apiBase}/claims/${claimId}/document-download` : `${apiBase}/claims/CLM-101/document-download`;
 
